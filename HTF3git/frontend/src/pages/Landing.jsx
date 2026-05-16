@@ -17,7 +17,7 @@ const Landing = () => {
             fontWeight: "600", color: "var(--primary)", marginBottom: "32px",
             border: "1px solid rgba(230, 57, 70, 0.1)"
           }}>
-            <Shield size={14} /> KLS Gogte Institute of Technology · Belagavi
+            <Shield size={14} /> Campus SOS App
           </div>
 
           <h1 style={{
@@ -32,7 +32,7 @@ const Landing = () => {
             maxWidth: "620px", margin: "0 auto 48px auto",
             fontSize: "1.2rem", color: "var(--accents-3)", lineHeight: "1.65"
           }}>
-            Sahayaka is KLS GIT's AI-powered emergency response system — instant SOS
+            Sahayak AI is Campus First AI-powered emergency response system — instant SOS
             alerts, real-time triage, and offline-first communication built for every
             corner of our campus.
           </p>
@@ -99,7 +99,7 @@ const Landing = () => {
             </div>
             <h3 style={{ fontSize: "1.3rem", marginBottom: "10px" }}>Offline-First SOS</h3>
             <p>
-              Works in basement labs, server rooms, and dead zones across KLS GIT.
+              Works in basement labs, server rooms, and dead zones across your campus.
               Alerts are queued locally and auto-dispatched via SMS the moment
               connectivity returns.
             </p>
@@ -159,9 +159,9 @@ const Landing = () => {
         borderTop: "1px solid var(--accents-2)", padding: "1.5rem 2rem",
         textAlign: "center", fontSize: "0.8rem", color: "var(--accents-3)"
       }}>
-        <strong style={{ color: "var(--foreground)" }}>Sahayaka</strong>
-        {" · "}KLS Gogte Institute of Technology, Belagavi — 590008
-        {" · "}Built for Hack The Future 3.0
+        <strong style={{ color: "var(--foreground)" }}>Sahayak AI</strong>
+        {" · "}Built by Team Sahayak AI..
+        {" · "}
       </div>
     </div>
   );
