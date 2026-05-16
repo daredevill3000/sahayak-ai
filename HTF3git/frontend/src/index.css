@@ -3800,3 +3800,29 @@ button:active {
   vertical-align: middle;
   letter-spacing: 0.03em;
 }
+
+/* ── Auth page — back button ─────────────────────────────── */
+.auth-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.4rem 0.85rem;
+  margin-bottom: 1.25rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--accents-3);
+  border: 1px solid var(--accents-2);
+  cursor: pointer;
+  box-shadow: none;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.auth-back-btn:hover {
+  color: var(--primary);
+  border-color: rgba(230, 57, 70, 0.35);
+  background: rgba(230, 57, 70, 0.05);
+  transform: translateX(-2px);
+  box-shadow: none;
+}

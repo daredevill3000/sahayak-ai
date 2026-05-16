@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Shield, GraduationCap, BookOpen } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { Shield, GraduationCap, BookOpen, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const ROLES = [
@@ -49,6 +49,17 @@ const Auth = () => {
       </div>
 
       <div className="auth-glass-card">
+        {/* Back button */}
+        <Link to="/" style={{ textDecoration: "none" }}>
+          <button
+            type="button"
+            className="auth-back-btn"
+          >
+            <ArrowLeft size={15} />
+            
+          </button>
+        </Link>
+
         {/* Header */}
         <div className="auth-header">
           <Shield size={40} className="auth-icon" />
