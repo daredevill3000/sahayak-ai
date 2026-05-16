@@ -2712,13 +2712,71 @@ button:active {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable body — everything below the sticky header */
+.hospital-modal-body {
   overflow-y: auto;
+  flex: 1;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(230, 57, 70, 0.3) transparent;
+}
+
+/* Chrome / Safari / Edge */
+.hospital-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.hospital-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+
+.hospital-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(230, 57, 70, 0.25);
+  border-radius: 99px;
+}
+
+.hospital-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(230, 57, 70, 0.5);
 }
 
 .hospital-modal-header {
   padding: 1.5rem 1.5rem 1rem;
   border-bottom: 3px solid;
   text-align: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* X close button */
+.hospital-modal-x {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--accents-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.15s, color 0.15s, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s;
+}
+
+.hospital-modal-x:hover {
+  background: rgba(230, 57, 70, 0.1);
+  color: var(--primary);
+  border-color: rgba(230, 57, 70, 0.3);
+  transform: rotate(90deg) scale(1.1);
 }
 
 .hospital-severity-badge {
@@ -4458,4 +4516,104 @@ button:active {
 
 .smap-canvas-wrap .leaflet-popup-tip-container {
   margin-top: -1px;
+}
+
+/* ============================================================
+   HOSPITAL MODAL — EMERGENCY CONTACTS SECTION
+   ============================================================ */
+
+.ec-section {
+  padding: 0 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--accents-2);
+  margin-bottom: 0.75rem;
+}
+
+.ec-section-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accents-3);
+  margin-bottom: 0.5rem;
+}
+
+.ec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ec-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ec-item:hover {
+  background: #fff;
+  border-color: var(--accents-2);
+}
+
+.ec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ec-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ec-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ec-number {
+  font-size: 0.72rem;
+  color: var(--accents-3);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 600;
+}
+
+.ec-call-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: none;
+}
+
+.ec-call-btn:hover {
+  opacity: 0.88;
+  transform: scale(1.04);
+}
+
+.ec-called {
+  background: #22c55e !important;
 }

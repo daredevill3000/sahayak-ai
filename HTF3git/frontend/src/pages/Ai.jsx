@@ -1,19 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Send, Mic, User, Bot, Sparkles, AlertCircle, Loader2,
-  Volume2, VolumeX, MicOff, Phone, MapPin, Map,
+  Volume2, VolumeX, MicOff, Phone, MapPin, Map, Shield, Users, X,
 } from "lucide-react";
 import { Geolocation } from "@capacitor/geolocation";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from "react-markdown";
-import { SpeechRecognition as CapacitorSpeech } from "@capacitor-community/speech-recognition";
+import { useAuth } from "../context/AuthContext";
 // ── Hospital database (nearest first) ────────────────────────────────────
 const HOSPITALS = [
-  { name: "Gokak Government Hospital", phone: "tel:+918352220300", location: "Gokak, Belagavi", lat: 16.1667, lng: 74.8333 },
-  { name: "KLE Hospital Belagavi",      phone: "tel:+918312470000", location: "Belagavi",        lat: 15.8677, lng: 74.5089 },
-  { name: "KIMS Hospital Hubli",        phone: "tel:+918362370000", location: "Hubli",           lat: 15.3647, lng: 75.1240 },
-  { name: "District Hospital Dharwad",  phone: "tel:+918362447700", location: "Dharwad",         lat: 15.4589, lng: 75.0078 },
-  { name: "National Emergency (112)",   phone: "tel:112",           location: "Anywhere",        lat: null,    lng: null    },
+  { name: "Udyambag Multi Speciality Hospital", phone: "tel:+918312407000", location: "Udyambag, Belagavi", lat: 15.8412, lng: 74.5042 },
+  { name: "KLE Hospital Belagavi",              phone: "tel:+918312470000", location: "Nehru Nagar, Belagavi", lat: 15.8677, lng: 74.5089 },
+  { name: "National Emergency (112)",           phone: "tel:112",           location: "Anywhere",             lat: null,    lng: null    },
 ];
 
 // ── Gemini setup ──────────────────────────────────────────────────────────
@@ -302,9 +300,17 @@ const SEVERITY_CONFIG = {
   LOW:      { color: "#22c55e", bg: "rgba(34,197,94,0.1)",  label: "LOW",      icon: "✅" },
 };
 
+// ── Campus contacts always shown in the modal ─────────────────────────────
+const CAMPUS_EMERGENCY_CONTACTS = [
+  { name: "KLS GIT Security",    number: "0831-2405000", color: "#3b82f6" },
+  { name: "KLS GIT Medical",     number: "108",          color: "#ef4444" },
+  { name: "Principal's Office",  number: "0831-2405001", color: "#f59e0b" },
+];
+
 // ── Hospital Call Modal ───────────────────────────────────────────────────
-const HospitalCallModal = ({ severity, summary, onClose }) => {
-  const [calledList, setCalledList] = useState([]);
+const HospitalCallModal = ({ severity, summary, personalContacts, onClose }) => {
+  const [calledList,       setCalledList]       = useState([]);
+  const [calledContacts,   setCalledContacts]   = useState([]);
   const [selectedHospital, setSelectedHospital] = useState(0);
   const cfg = SEVERITY_CONFIG[severity] || SEVERITY_CONFIG.URGENT;
 
@@ -313,8 +319,13 @@ const HospitalCallModal = ({ severity, summary, onClose }) => {
     window.location.href = HOSPITALS[index].phone;
   };
 
+  const callContact = (number, key) => {
+    setCalledContacts(prev => [...new Set([...prev, key])]);
+    window.location.href = `tel:${number.replace(/\s/g, "")}`;
+  };
+
   const hospital = HOSPITALS[selectedHospital];
-  const mapUrl = hospital.lat 
+  const mapUrl = hospital.lat
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${hospital.lng-0.01}%2C${hospital.lat-0.01}%2C${hospital.lng+0.01}%2C${hospital.lat+0.01}&layer=mapnik&marker=${hospital.lat}%2C${hospital.lng}`
     : null;
 
@@ -322,27 +333,99 @@ const HospitalCallModal = ({ severity, summary, onClose }) => {
     <div className="hospital-modal-overlay" role="dialog" aria-modal="true">
       <div className="hospital-modal">
         <div className="hospital-modal-header" style={{ borderColor: cfg.color }}>
+          {/* X close button */}
+          <button className="hospital-modal-x" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
           <div className="hospital-severity-badge" style={{ background: cfg.bg, color: cfg.color }}>
             {cfg.icon} {cfg.label} EMERGENCY
           </div>
-          <h2>Call Nearest Hospital</h2>
+          <h2>Emergency Response</h2>
           {summary && <p className="hospital-summary">{summary}</p>}
         </div>
 
-        {/* Embedded Map Section */}
+        {/* ── Scrollable body ── */}
+        <div className="hospital-modal-body">
+
+        {/* ── Campus & Personal Contacts ── */}
+        <div className="ec-section">
+          <div className="ec-section-title">
+            <Shield size={13} /> Campus Contacts
+          </div>
+          <div className="ec-list">
+            {CAMPUS_EMERGENCY_CONTACTS.map((c) => {
+              const key = `campus-${c.number}`;
+              const called = calledContacts.includes(key);
+              return (
+                <div key={key} className="ec-item">
+                  <div className="ec-dot" style={{ background: c.color }} />
+                  <div className="ec-info">
+                    <span className="ec-name">{c.name}</span>
+                    <span className="ec-number">{c.number}</span>
+                  </div>
+                  <button
+                    className={`ec-call-btn ${called ? "ec-called" : ""}`}
+                    style={called ? {} : { background: c.color }}
+                    onClick={() => callContact(c.number, key)}
+                  >
+                    <Phone size={13} />
+                    {called ? "Called" : "Call"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Personal contacts — only if user has added any */}
+          {personalContacts.length > 0 && (
+            <>
+              <div className="ec-section-title" style={{ marginTop: "0.75rem" }}>
+                <Users size={13} /> My Emergency Contacts
+              </div>
+              <div className="ec-list">
+                {personalContacts.map((c, i) => {
+                  const key = `personal-${i}`;
+                  const called = calledContacts.includes(key);
+                  return (
+                    <div key={key} className="ec-item">
+                      <div className="ec-dot" style={{ background: "#10b981" }} />
+                      <div className="ec-info">
+                        <span className="ec-name">{c.name}</span>
+                        <span className="ec-number">{c.number}</span>
+                      </div>
+                      <button
+                        className={`ec-call-btn ${called ? "ec-called" : ""}`}
+                        style={called ? {} : { background: "#10b981" }}
+                        onClick={() => callContact(c.number, key)}
+                      >
+                        <Phone size={13} />
+                        {called ? "Called" : "Call"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Hospitals ── */}
+        <div className="ec-section-title" style={{ padding: "0 1.25rem", marginBottom: "0.5rem" }}>
+          <MapPin size={13} /> Nearest Hospitals
+        </div>
+
+        {/* Embedded Map */}
         {mapUrl && (
           <div className="hospital-map-container">
             <iframe
               title="Hospital Location"
               width="100%"
-              height="180"
+              height="160"
               frameBorder="0"
               scrolling="no"
-              marginHeight="0"
-              marginWidth="0"
               src={mapUrl}
-              style={{ border: 'none', borderRadius: '12px' }}
-            ></iframe>
+              style={{ border: "none", borderRadius: "12px" }}
+            />
             <div className="map-overlay-info">
               <MapPin size={12} />
               <span>{hospital.name}</span>
@@ -350,16 +433,14 @@ const HospitalCallModal = ({ severity, summary, onClose }) => {
           </div>
         )}
 
-        <p className="hospital-instruction">
-          Tap a hospital to see on map and call.
-        </p>
+        <p className="hospital-instruction">Tap a hospital to preview on map, then call.</p>
         <div className="hospital-list">
           {HOSPITALS.map((h, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className={`hospital-item ${calledList.includes(i) ? "called" : ""} ${selectedHospital === i ? "selected" : ""}`}
               onClick={() => setSelectedHospital(i)}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: "pointer" }}
             >
               <div className="hospital-info">
                 <span className="hospital-name">{h.name}</span>
@@ -369,10 +450,7 @@ const HospitalCallModal = ({ severity, summary, onClose }) => {
                 {h.lat && <Map size={16} className="map-indicator-icon" />}
                 <button
                   className="hospital-call-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    callHospital(i);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); callHospital(i); }}
                   style={calledList.includes(i) ? { background: "#22c55e" } : {}}
                 >
                   <Phone size={16} />
@@ -382,6 +460,9 @@ const HospitalCallModal = ({ severity, summary, onClose }) => {
             </div>
           ))}
         </div>
+
+        </div> {/* end hospital-modal-body */}
+
         <div className="hospital-modal-footer">
           <button className="hospital-close-btn" onClick={onClose}>Close</button>
           <a href="tel:112" className="hospital-emergency-btn">
@@ -416,6 +497,9 @@ const SeverityBanner = ({ severity, summary, onCallHospital }) => {
 
 // ── Main AI Component ─────────────────────────────────────────────────────
 const Ai = () => {
+  const { user } = useAuth();
+  // Personal emergency contacts added by the user in their Profile
+  const personalContacts = user?.emergencyContacts || [];
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -437,8 +521,6 @@ const Ai = () => {
   const [error, setError] = useState(null);
 
   const scrollRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
   // Keep a persistent Gemini chat session so it remembers conversation history
   const chatRef = useRef(null);
@@ -663,105 +745,75 @@ const Ai = () => {
     }
   };
 
-  const handleTranscribe = async (audioBlob) => {
-    setIsTyping(true);
-    const apiKey = import.meta.env.VITE_SARVAM_API_KEY;
-    if (!apiKey) {
-      setError("Sarvam API key not found");
-      setIsTyping(false);
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", audioBlob, "audio.wav");
-    formData.append("model", "saaras:v3");
-    formData.append("language_code", "unknown"); // Auto-detect language
-
-    try {
-      const response = await fetch("https://api.sarvam.ai/speech-to-text", {
-        method: "POST",
-        headers: {
-          "api-subscription-key": apiKey
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      if (response.ok && data.transcript) {
-        let detectedLang = language;
-        if (data.language_code) {
-          const matchedLang = LANGUAGES.find(l => l.code === data.language_code);
-          if (matchedLang) {
-            setLanguage(data.language_code);
-            detectedLang = data.language_code;
-          }
-        }
-        
-        setInput(data.transcript);
-        // Automatically send the transcribed text
-        handleSend(data.transcript, detectedLang);
-      } else {
-        throw new Error(data.message || "Failed to transcribe audio");
-      }
-    } catch (err) {
-      console.error("Saaras API Error:", err);
-      setError("Could not transcribe audio. " + err.message);
-      setIsTyping(false);
-    }
+  const handleTranscribe = async (transcript, detectedLang) => {
+    if (!transcript?.trim()) return;
+    setInput(transcript);
+    handleSend(transcript, detectedLang);
   };
 
-  // ── Mic toggle ────────────────────────────────────────────────────────
+  // ── Mic toggle — Web Speech API (no CORS, works in browser natively) ──
+  const recognitionRef = useRef(null);
+
   const toggleMic = async () => {
+    // Stop if already listening
     if (isListening) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
+      recognitionRef.current?.stop();
       setIsListening(false);
       return;
     }
 
     setError(null);
-    setIsListening(false);
+
+    // Web Speech API — supported in Chrome, Edge, Safari 14.1+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError("Voice input is not supported in this browser. Try Chrome or Edge.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.lang          = language;   // uses currently selected language
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous    = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setInput("");
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const confidence = event.results[0][0].confidence;
+      console.log(`🎤 Transcript: "${transcript}" (confidence: ${(confidence * 100).toFixed(0)}%)`);
+      handleTranscribe(transcript, language);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      if (event.error === "not-allowed") {
+        setError("Microphone access denied. Please allow microphone permission.");
+      } else if (event.error === "no-speech") {
+        setError("No speech detected. Please try again.");
+      } else if (event.error !== "aborted") {
+        setError(`Voice input error: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
 
     try {
-      // If running on web (or iOS/Android WebView), MediaRecorder may work.
-      // Capacitor SpeechRecognition is NOT for audio recording via MediaRecorder, and some platforms throw "Method not implemented on web".
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-        setError("Voice input is not supported on this device/browser.");
-        return;
-      }
-
-      // For Capacitor builds: request permissions via browser API as well (MediaRecorder uses getUserMedia).
-      // Avoid calling CapacitorSpeech.requestPermissions() here because it can throw on web.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
-          await handleTranscribe(audioBlob);
-        } finally {
-          stream.getTracks().forEach((track) => track.stop());
-          audioChunksRef.current = [];
-        }
-      };
-
-      mediaRecorder.start();
-      setInput("");
-      setIsListening(true);
+      recognition.start();
     } catch (err) {
-      console.error("Microphone access denied:", err);
       setIsListening(false);
-      const msg = err?.message || "Microphone access denied or not available.";
-      setError(msg.includes("not implemented") ? "Voice input not implemented on this platform." : "Microphone access denied or not available.");
+      setError("Could not start voice input: " + err.message);
     }
   };
 
@@ -807,8 +859,8 @@ const Ai = () => {
         </div>
       </div>
 
-      {/* Severity Banner */}
-      {currentSeverity && (
+      {/* Severity Banner — only for actionable levels */}
+      {(currentSeverity === "CRITICAL" || currentSeverity === "URGENT") && (
         <SeverityBanner
           severity={currentSeverity}
           summary={currentSummary}
@@ -907,6 +959,7 @@ const Ai = () => {
         <HospitalCallModal
           severity={currentSeverity}
           summary={currentSummary}
+          personalContacts={personalContacts}
           onClose={() => setShowHospitalModal(false)}
         />
       )}
