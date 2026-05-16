@@ -4,9 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Profile from "./Profile";
 
-// Initials from full name
-const initials = (name = "") =>
-  name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("") || "?";
+// First character of name only
+const firstChar = (name = "") =>
+  name.trim()[0]?.toUpperCase() || "?";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -47,11 +47,7 @@ const Navbar = () => {
               aria-label="Open profile"
               title={user.name || user.usn}
             >
-              <span className="nav-avatar-initials">{initials(user.name)}</span>
-              <div className="nav-avatar-info">
-                <span className="nav-avatar-name">{user.name || "—"}</span>
-                <span className="nav-avatar-usn">{user.usn  || "—"}</span>
-              </div>
+              <span className="nav-avatar-initials">{firstChar(user.name)}</span>
             </button>
           )}
 
