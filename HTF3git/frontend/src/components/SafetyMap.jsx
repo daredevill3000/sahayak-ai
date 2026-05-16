@@ -1,124 +1,173 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  MapContainer, TileLayer, Circle, Marker, Popup,
+  useMap, useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import {
   X, Flame, Zap, FlaskConical, AlertTriangle,
   ShieldCheck, Navigation, RefreshCw, Info,
+  LocateFixed, WifiOff, Siren,
 } from "lucide-react";
 
-// ── KLS GIT campus centre (Belagavi) ─────────────────────────────────────────
-const CAMPUS = { lat: 15.8494, lng: 74.4956 };
+// ── Fix leaflet's broken default icon paths in Vite ──────────────────────────
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 
-// ── Simulated hazard zones on campus ─────────────────────────────────────────
-// Each zone has a level: "critical" | "high" | "moderate" | "low"
+// ── KLS GIT campus centre ─────────────────────────────────────────────────────
+const CAMPUS = [15.8494, 74.4956];
+
+// ── Hazard zones — real lat/lng offsets from campus centre ───────────────────
 const HAZARD_ZONES = [
   {
-    id: 1,
-    label: "Chemistry Lab Fire",
-    type: "fire",
-    level: "critical",
-    icon: Flame,
-    color: "#ef4444",
-    // Offset from campus centre in degrees (tiny — campus scale)
-    dLat:  0.0012, dLng:  0.0008,
-    radius: 60,   // metres (visual only)
-    detail: "Active fire reported in Main Building B-Block Chemistry Lab. Evacuate immediately.",
+    id: 1, label: "Chemistry Lab Fire", type: "fire", level: "critical",
+    icon: Flame, color: "#ef4444", fillColor: "#ef4444",
+    lat: CAMPUS[0] + 0.0012, lng: CAMPUS[1] + 0.0008,
+    radiusM: 60,
+    detail: "Active fire in Main Building B-Block Chemistry Lab. Evacuate immediately.",
   },
   {
-    id: 2,
-    label: "Electrical Fault",
-    type: "electrical",
-    level: "high",
-    icon: Zap,
-    color: "#f59e0b",
-    dLat: -0.0005, dLng:  0.0015,
-    radius: 40,
-    detail: "High-voltage fault near EEE Department transformer yard. Keep 50 m distance.",
+    id: 2, label: "Electrical Fault", type: "electrical", level: "high",
+    icon: Zap, color: "#f59e0b", fillColor: "#f59e0b",
+    lat: CAMPUS[0] - 0.0005, lng: CAMPUS[1] + 0.0015,
+    radiusM: 40,
+    detail: "High-voltage fault near EEE Dept transformer yard. Keep 50 m distance.",
   },
   {
-    id: 3,
-    label: "Chemical Spill",
-    type: "chemical",
-    level: "moderate",
-    icon: FlaskConical,
-    color: "#8b5cf6",
-    dLat:  0.0018, dLng: -0.0010,
-    radius: 35,
-    detail: "Minor solvent spill in Pharmacy Lab. Area cordoned — avoid Block D corridor.",
+    id: 3, label: "Chemical Spill", type: "chemical", level: "moderate",
+    icon: FlaskConical, color: "#8b5cf6", fillColor: "#8b5cf6",
+    lat: CAMPUS[0] + 0.0018, lng: CAMPUS[1] - 0.0010,
+    radiusM: 35,
+    detail: "Minor solvent spill in Pharmacy Lab. Avoid Block D corridor.",
   },
   {
-    id: 4,
-    label: "Crowd Surge",
-    type: "crowd",
-    level: "low",
-    icon: AlertTriangle,
-    color: "#22c55e",
-    dLat: -0.0014, dLng: -0.0006,
-    radius: 30,
-    detail: "Dense crowd near Main Gate after event. Use alternate exit via Sports Ground.",
+    id: 4, label: "Crowd Surge", type: "crowd", level: "low",
+    icon: AlertTriangle, color: "#22c55e", fillColor: "#22c55e",
+    lat: CAMPUS[0] - 0.0014, lng: CAMPUS[1] - 0.0006,
+    radiusM: 30,
+    detail: "Dense crowd near Main Gate. Use alternate exit via Sports Ground.",
   },
 ];
 
-// ── Safe assembly points ──────────────────────────────────────────────────────
 const SAFE_ZONES = [
-  { id: "s1", label: "Assembly Point A", dLat:  0.0022, dLng:  0.0020 },
-  { id: "s2", label: "Assembly Point B", dLat: -0.0020, dLng:  0.0018 },
+  { id: "s1", label: "Assembly Point A", lat: CAMPUS[0] + 0.0022, lng: CAMPUS[1] + 0.0020 },
+  { id: "s2", label: "Assembly Point B", lat: CAMPUS[0] - 0.0020, lng: CAMPUS[1] + 0.0018 },
 ];
 
-// ── Overall danger level derived from worst active hazard ────────────────────
 const DANGER_META = {
-  critical: { label: "CRITICAL DANGER",  color: "#ef4444", bg: "rgba(239,68,68,0.1)",   border: "rgba(239,68,68,0.3)",   pulse: true  },
-  high:     { label: "HIGH DANGER",      color: "#f59e0b", bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.3)",  pulse: true  },
-  moderate: { label: "MODERATE RISK",    color: "#8b5cf6", bg: "rgba(139,92,246,0.1)",  border: "rgba(139,92,246,0.3)",  pulse: false },
-  low:      { label: "LOW RISK",         color: "#22c55e", bg: "rgba(34,197,94,0.1)",   border: "rgba(34,197,94,0.3)",   pulse: false },
-  safe:     { label: "ALL CLEAR",        color: "#16a34a", bg: "rgba(22,163,74,0.08)",  border: "rgba(22,163,74,0.25)",  pulse: false },
+  critical: { label: "CRITICAL DANGER", color: "#ef4444", bg: "rgba(239,68,68,0.1)",  border: "rgba(239,68,68,0.3)",  pulse: true  },
+  high:     { label: "HIGH DANGER",     color: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.3)", pulse: true  },
+  moderate: { label: "MODERATE RISK",   color: "#8b5cf6", bg: "rgba(139,92,246,0.1)", border: "rgba(139,92,246,0.3)", pulse: false },
+  low:      { label: "LOW RISK",        color: "#22c55e", bg: "rgba(34,197,94,0.1)",  border: "rgba(34,197,94,0.3)",  pulse: false },
+  safe:     { label: "ALL CLEAR",       color: "#16a34a", bg: "rgba(22,163,74,0.08)", border: "rgba(22,163,74,0.25)", pulse: false },
 };
 
 const LEVEL_ORDER = ["critical", "high", "moderate", "low", "safe"];
-const worstLevel  = (zones) =>
-  LEVEL_ORDER.find(l => zones.some(z => z.level === l)) || "safe";
+const worstLevel  = (zones) => LEVEL_ORDER.find(l => zones.some(z => z.level === l)) || "safe";
 
-// ── Degree → pixel helpers (equirectangular, good enough at campus scale) ─────
-// We render a 600×400 virtual canvas; campus centre maps to (300, 200).
-const W = 600, H = 400;
-const SCALE = 80000; // pixels per degree at this zoom
+// Haversine distance in metres
+const haversine = (lat1, lng1, lat2, lng2) => {
+  const R  = 6371000;
+  const φ1 = (lat1 * Math.PI) / 180, φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+  const a  = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
 
-const toXY = (dLat, dLng) => ({
-  x: W / 2 + dLng * SCALE,
-  y: H / 2 - dLat * SCALE,
+// ── Custom DivIcon for user dot ───────────────────────────────────────────────
+const makeUserIcon = () => L.divIcon({
+  className: "",
+  html: `<div class="lmap-user-dot"><div class="lmap-user-ring"></div></div>`,
+  iconSize:   [24, 24],
+  iconAnchor: [12, 12],
 });
 
-// Metres → pixels (1° lat ≈ 111 000 m)
-const mToPx = (m) => (m / 111000) * SCALE;
+// ── Custom DivIcon for assembly points ───────────────────────────────────────
+const makeSafeIcon = () => L.divIcon({
+  className: "",
+  html: `<div class="lmap-safe-icon">🛡</div>`,
+  iconSize:   [28, 28],
+  iconAnchor: [14, 14],
+});
+
+// ── Inner component: pans map to user position ────────────────────────────────
+const MapController = ({ userPos, shouldFollow }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (userPos && shouldFollow) {
+      map.setView([userPos.lat, userPos.lng], map.getZoom(), { animate: true });
+    }
+  }, [userPos, shouldFollow, map]);
+  return null;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 const SafetyMap = ({ onClose }) => {
   const backdropRef  = useRef(null);
+  const watchRef     = useRef(null);
+
+  const [userPos,    setUserPos]    = useState(null);
+  const [gpsStatus,  setGpsStatus]  = useState("acquiring");
   const [selected,   setSelected]   = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [follow,     setFollow]     = useState(true); // auto-pan to user
 
-  const danger = worstLevel(HAZARD_ZONES);
-  const meta   = DANGER_META[danger];
+  // Which hazard zones is the user currently inside?
+  const dangerZones = userPos
+    ? HAZARD_ZONES.filter(z => haversine(userPos.lat, userPos.lng, z.lat, z.lng) <= z.radiusM)
+    : [];
 
-  // Close on backdrop click
-  const handleBackdrop = (e) => {
-    if (e.target === backdropRef.current) onClose();
-  };
+  const overallDanger = dangerZones.length > 0
+    ? worstLevel(dangerZones)
+    : worstLevel(HAZARD_ZONES);
 
-  // Close on Escape
+  const meta = DANGER_META[overallDanger];
+
+  // ── GPS watch ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) { setGpsStatus("unavailable"); return; }
+
+    watchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+        setUserPos({ lat, lng, accuracy });
+        setGpsStatus("live");
+        setLastUpdate(new Date());
+      },
+      (err) => {
+        setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+    );
+
+    return () => {
+      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+    };
+  }, []);
+
+  // ── Keyboard close ──────────────────────────────────────────────────────────
   useEffect(() => {
     const h = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [onClose]);
 
-  // Simulate a data refresh
+  const handleBackdrop = (e) => { if (e.target === backdropRef.current) onClose(); };
+
   const handleRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setLastUpdate(new Date());
-      setRefreshing(false);
-    }, 1200);
+    setTimeout(() => { setLastUpdate(new Date()); setRefreshing(false); }, 800);
   };
+
+  const userIcon = useRef(makeUserIcon());
+  const safeIcon = useRef(makeSafeIcon());
 
   return (
     <div
@@ -138,184 +187,192 @@ const SafetyMap = ({ onClose }) => {
               <Navigation size={18} />
               <span>Campus Safety Map</span>
               <span className="smap-campus-tag">KLS GIT · Live</span>
+              <span className={`smap-gps-pill smap-gps-${gpsStatus}`}>
+                {gpsStatus === "live"        && <><LocateFixed size={11} /> GPS Live</>}
+                {gpsStatus === "acquiring"   && <><RefreshCw  size={11} className="smap-spin" /> Acquiring…</>}
+                {gpsStatus === "denied"      && <><WifiOff    size={11} /> GPS Denied</>}
+                {gpsStatus === "unavailable" && <><WifiOff    size={11} /> No GPS</>}
+              </span>
             </div>
             <button className="smap-close" onClick={onClose} aria-label="Close map">
               <X size={18} />
             </button>
           </div>
 
-          {/* Danger level banner */}
+          {/* Danger banner */}
           <div
             className={`smap-danger-banner ${meta.pulse ? "smap-pulse" : ""}`}
             style={{ background: meta.bg, border: `1px solid ${meta.border}`, color: meta.color }}
           >
-            <AlertTriangle size={15} />
-            <strong>{meta.label}</strong>
-            <span className="smap-danger-sub">
-              {HAZARD_ZONES.filter(z => z.level === danger).length} active zone
-              {HAZARD_ZONES.filter(z => z.level === danger).length !== 1 ? "s" : ""}
-            </span>
+            {dangerZones.length > 0 ? <Siren size={15} /> : <AlertTriangle size={15} />}
+            <strong>
+              {dangerZones.length > 0 ? "⚠ YOU ARE INSIDE A HAZARD ZONE" : meta.label}
+            </strong>
+            {dangerZones.length > 0
+              ? <span className="smap-danger-sub">{dangerZones.map(z => z.label).join(" · ")}</span>
+              : <span className="smap-danger-sub">{HAZARD_ZONES.filter(z => z.level === overallDanger).length} active zone(s) on campus</span>
+            }
             <span className="smap-last-update">
-              Updated {lastUpdate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {lastUpdate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
-            <button
-              className="smap-refresh-btn"
-              onClick={handleRefresh}
-              aria-label="Refresh map data"
-            >
+            <button className="smap-refresh-btn" onClick={handleRefresh} aria-label="Refresh">
               <RefreshCw size={13} className={refreshing ? "smap-spin" : ""} />
             </button>
           </div>
         </div>
 
-        {/* ── Map canvas + legend row ──────────────────────────────────────── */}
+        {/* ── Map + sidebar ────────────────────────────────────────────────── */}
         <div className="smap-body">
 
-          {/* SVG map */}
-          <div className="smap-canvas-wrap">
-            <svg
-              viewBox={`0 0 ${W} ${H}`}
-              className="smap-svg"
-              aria-label="Campus hazard map"
+          {/* Leaflet map */}
+          <div className="smap-canvas-wrap" style={{ position: "relative" }}>
+            <MapContainer
+              center={userPos ? [userPos.lat, userPos.lng] : CAMPUS}
+              zoom={17}
+              style={{ width: "100%", height: "100%", minHeight: 320 }}
+              zoomControl={true}
+              attributionControl={true}
             >
-              {/* ── Background grid (campus feel) ── */}
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="1" />
-                </pattern>
-                {/* Radial gradient for hazard circles */}
-                {HAZARD_ZONES.map(z => (
-                  <radialGradient key={`g${z.id}`} id={`grad${z.id}`} cx="50%" cy="50%" r="50%">
-                    <stop offset="0%"   stopColor={z.color} stopOpacity="0.35" />
-                    <stop offset="100%" stopColor={z.color} stopOpacity="0.05" />
-                  </radialGradient>
-                ))}
-              </defs>
-
-              <rect width={W} height={H} fill="#f0f4f8" />
-              <rect width={W} height={H} fill="url(#grid)" />
-
-              {/* ── Campus boundary outline ── */}
-              <rect
-                x={W / 2 - 220} y={H / 2 - 150}
-                width={440} height={300}
-                rx={16}
-                fill="rgba(255,255,255,0.7)"
-                stroke="rgba(0,0,0,0.1)"
-                strokeWidth={2}
-                strokeDasharray="8 4"
+              {/* OpenStreetMap tiles */}
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                maxZoom={19}
               />
-              <text x={W / 2 - 210} y={H / 2 - 130} fontSize={11} fill="rgba(0,0,0,0.3)" fontWeight={600}>
-                KLS GIT CAMPUS BOUNDARY
-              </text>
 
-              {/* ── Simulated building blocks ── */}
-              {[
-                { x: W/2 - 80, y: H/2 - 90, w: 100, h: 60,  label: "Main Block" },
-                { x: W/2 + 60, y: H/2 - 80, w:  70, h: 50,  label: "EEE Dept"   },
-                { x: W/2 - 160,y: H/2 + 10, w:  80, h: 55,  label: "Hostel C"   },
-                { x: W/2 + 20, y: H/2 + 20, w:  90, h: 50,  label: "Block D"    },
-                { x: W/2 - 60, y: H/2 + 80, w: 120, h: 40,  label: "Sports Gnd" },
-              ].map(b => (
-                <g key={b.label}>
-                  <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={6}
-                    fill="rgba(148,163,184,0.25)" stroke="rgba(100,116,139,0.3)" strokeWidth={1.5} />
-                  <text x={b.x + b.w / 2} y={b.y + b.h / 2 + 4}
-                    textAnchor="middle" fontSize={9} fill="rgba(51,65,85,0.7)" fontWeight={600}>
-                    {b.label}
-                  </text>
-                </g>
+              {/* Auto-pan controller */}
+              <MapController userPos={userPos} shouldFollow={follow} />
+
+              {/* Hazard zone circles */}
+              {HAZARD_ZONES.map(z => {
+                const inside = userPos
+                  ? haversine(userPos.lat, userPos.lng, z.lat, z.lng) <= z.radiusM
+                  : false;
+                return (
+                  <Circle
+                    key={z.id}
+                    center={[z.lat, z.lng]}
+                    radius={z.radiusM}
+                    pathOptions={{
+                      color:       z.color,
+                      fillColor:   z.fillColor,
+                      fillOpacity: inside ? 0.35 : 0.2,
+                      weight:      inside ? 3 : 2,
+                      dashArray:   inside ? null : "6 4",
+                    }}
+                    eventHandlers={{ click: () => setSelected(z) }}
+                  >
+                    <Popup>
+                      <div style={{ minWidth: 180 }}>
+                        <strong style={{ color: z.color, fontSize: "0.9rem" }}>{z.label}</strong>
+                        <div style={{ fontSize: "0.72rem", fontWeight: 700, color: z.color, marginBottom: 4 }}>
+                          {z.level.toUpperCase()}
+                        </div>
+                        <p style={{ fontSize: "0.78rem", color: "#444", margin: 0, lineHeight: 1.4 }}>
+                          {z.detail}
+                        </p>
+                      </div>
+                    </Popup>
+                  </Circle>
+                );
+              })}
+
+              {/* Assembly point markers */}
+              {SAFE_ZONES.map(s => (
+                <Marker key={s.id} position={[s.lat, s.lng]} icon={safeIcon.current}>
+                  <Popup>
+                    <strong style={{ color: "#16a34a" }}>{s.label}</strong>
+                    <p style={{ fontSize: "0.78rem", margin: "4px 0 0", color: "#444" }}>
+                      Designated safe assembly point
+                    </p>
+                  </Popup>
+                </Marker>
               ))}
 
-              {/* ── Roads / paths ── */}
-              <path d={`M ${W/2 - 220} ${H/2} L ${W/2 + 220} ${H/2}`}
-                stroke="rgba(255,255,255,0.8)" strokeWidth={8} strokeLinecap="round" />
-              <path d={`M ${W/2} ${H/2 - 150} L ${W/2} ${H/2 + 150}`}
-                stroke="rgba(255,255,255,0.8)" strokeWidth={6} strokeLinecap="round" />
-
-              {/* ── Safe assembly points ── */}
-              {SAFE_ZONES.map(s => {
-                const { x, y } = toXY(s.dLat, s.dLng);
-                return (
-                  <g key={s.id}>
-                    <circle cx={x} cy={y} r={14} fill="rgba(34,197,94,0.15)" stroke="#22c55e" strokeWidth={2} />
-                    <ShieldCheck size={12} x={x - 6} y={y - 6} color="#16a34a" />
-                    <text x={x} y={y + 24} textAnchor="middle" fontSize={8.5}
-                      fill="#16a34a" fontWeight={700}>{s.label}</text>
-                  </g>
-                );
-              })}
-
-              {/* ── Hazard zones ── */}
-              {HAZARD_ZONES.map(z => {
-                const { x, y } = toXY(z.dLat, z.dLng);
-                const r        = mToPx(z.radius);
-                const isActive = selected?.id === z.id;
-                const Icon     = z.icon;
-                return (
-                  <g
-                    key={z.id}
-                    style={{ cursor: "pointer" }}
-                    onClick={() => setSelected(isActive ? null : z)}
-                    role="button"
-                    aria-label={z.label}
+              {/* Live user marker */}
+              {userPos && (
+                <>
+                  <Marker
+                    position={[userPos.lat, userPos.lng]}
+                    icon={userIcon.current}
+                    zIndexOffset={1000}
                   >
-                    {/* Outer glow ring */}
-                    <circle cx={x} cy={y} r={r + 8}
-                      fill="none" stroke={z.color} strokeWidth={1.5}
-                      strokeDasharray="5 3" opacity={0.5} />
-                    {/* Filled hazard radius */}
-                    <circle cx={x} cy={y} r={r}
-                      fill={`url(#grad${z.id})`}
-                      stroke={z.color} strokeWidth={isActive ? 2.5 : 1.5}
-                      opacity={isActive ? 1 : 0.85} />
-                    {/* Icon placeholder (SVG foreignObject not reliable — use text emoji) */}
-                    <circle cx={x} cy={y} r={13}
-                      fill={z.color} opacity={0.9} />
-                    <text x={x} y={y + 5} textAnchor="middle" fontSize={13}>
-                      {z.type === "fire"       ? "🔥"
-                       : z.type === "electrical" ? "⚡"
-                       : z.type === "chemical"   ? "☣"
-                       : "⚠"}
-                    </text>
-                    {/* Label */}
-                    <text x={x} y={y + r + 18} textAnchor="middle"
-                      fontSize={9.5} fill={z.color} fontWeight={700}>
-                      {z.label}
-                    </text>
-                  </g>
-                );
-              })}
+                    <Popup>
+                      <strong style={{ color: "#3b82f6" }}>📍 Your Location</strong>
+                      <p style={{ fontSize: "0.75rem", margin: "4px 0 0", color: "#555" }}>
+                        {userPos.lat.toFixed(6)}°N, {userPos.lng.toFixed(6)}°E<br />
+                        ±{Math.round(userPos.accuracy)} m accuracy
+                      </p>
+                    </Popup>
+                  </Marker>
+                  {/* GPS accuracy circle */}
+                  <Circle
+                    center={[userPos.lat, userPos.lng]}
+                    radius={userPos.accuracy || 10}
+                    pathOptions={{
+                      color: "#3b82f6", fillColor: "#3b82f6",
+                      fillOpacity: 0.08, weight: 1, dashArray: "3 3",
+                    }}
+                  />
+                </>
+              )}
+            </MapContainer>
 
-              {/* ── User location (campus centre) ── */}
-              <circle cx={W / 2} cy={H / 2} r={18}
-                fill="rgba(59,130,246,0.15)" stroke="#3b82f6" strokeWidth={2} />
-              <circle cx={W / 2} cy={H / 2} r={6}
-                fill="#3b82f6" />
-              <text x={W / 2} y={H / 2 + 28} textAnchor="middle"
-                fontSize={9} fill="#3b82f6" fontWeight={700}>You</text>
-            </svg>
+            {/* Follow-me toggle */}
+            <button
+              className={`smap-recentre-btn ${follow ? "smap-follow-active" : ""}`}
+              onClick={() => setFollow(f => !f)}
+              title={follow ? "Following your location (click to stop)" : "Click to follow your location"}
+            >
+              <LocateFixed size={16} />
+            </button>
 
-            {/* Map attribution */}
-            <div className="smap-attribution">
-              Simulated campus overlay · KLS GIT, Belagavi
+            <div className="smap-attribution" style={{ zIndex: 1000 }}>
+              Live GPS · KLS GIT, Belagavi
             </div>
           </div>
 
-          {/* ── Legend + hazard list ─────────────────────────────────────── */}
+          {/* ── Sidebar ─────────────────────────────────────────────────── */}
           <div className="smap-sidebar">
+
+            {/* Live coords */}
+            {userPos && (
+              <div className="smap-coords-card">
+                <div className="smap-coords-label"><LocateFixed size={11} /> Your Location</div>
+                <div className="smap-coords-val">{userPos.lat.toFixed(6)}°N</div>
+                <div className="smap-coords-val">{userPos.lng.toFixed(6)}°E</div>
+                <div className="smap-coords-acc">±{Math.round(userPos.accuracy)} m accuracy</div>
+              </div>
+            )}
+
+            {/* In-danger alert */}
+            {dangerZones.length > 0 && (
+              <div className="smap-in-danger-alert">
+                <Siren size={14} />
+                <div>
+                  <strong>You are in a hazard zone!</strong>
+                  <p>{dangerZones[0].detail}</p>
+                </div>
+              </div>
+            )}
+
             <div className="smap-legend-title">
               <Info size={13} /> Active Hazards
             </div>
 
             <div className="smap-hazard-list">
               {HAZARD_ZONES.map(z => {
-                const Icon    = z.icon;
+                const Icon     = z.icon;
                 const isActive = selected?.id === z.id;
+                const distM    = userPos
+                  ? Math.round(haversine(userPos.lat, userPos.lng, z.lat, z.lng))
+                  : null;
+                const inside   = distM !== null && distM <= z.radiusM;
+
                 return (
                   <button
                     key={z.id}
-                    className={`smap-hazard-item ${isActive ? "smap-hazard-active" : ""}`}
+                    className={`smap-hazard-item ${isActive ? "smap-hazard-active" : ""} ${inside ? "smap-hazard-inside" : ""}`}
                     style={{ "--hz-color": z.color }}
                     onClick={() => setSelected(isActive ? null : z)}
                   >
@@ -326,6 +383,11 @@ const SafetyMap = ({ onClose }) => {
                       <span className="smap-hz-label">{z.label}</span>
                       <span className="smap-hz-level" style={{ color: z.color }}>
                         {z.level.toUpperCase()}
+                        {distM !== null && (
+                          <span style={{ color: inside ? "#ef4444" : "var(--accents-3)", fontWeight: 600, marginLeft: 4 }}>
+                            · {inside ? "INSIDE" : distM > 999 ? `${(distM/1000).toFixed(1)} km` : `${distM} m`}
+                          </span>
+                        )}
                       </span>
                     </div>
                   </button>
@@ -333,12 +395,9 @@ const SafetyMap = ({ onClose }) => {
               })}
             </div>
 
-            {/* Detail card for selected hazard */}
             {selected && (
-              <div
-                className="smap-detail-card"
-                style={{ borderColor: selected.color, background: `${selected.color}08` }}
-              >
+              <div className="smap-detail-card"
+                style={{ borderColor: selected.color, background: `${selected.color}08` }}>
                 <div className="smap-detail-header" style={{ color: selected.color }}>
                   <selected.icon size={14} />
                   <strong>{selected.label}</strong>
@@ -347,14 +406,13 @@ const SafetyMap = ({ onClose }) => {
               </div>
             )}
 
-            {/* Safe zone legend */}
             <div className="smap-safe-legend">
               <div className="smap-safe-dot" />
-              <span>Assembly Points (safe zones)</span>
+              <span>Assembly Points</span>
             </div>
             <div className="smap-safe-legend">
               <div className="smap-you-dot" />
-              <span>Your location</span>
+              <span>Your live location</span>
             </div>
           </div>
         </div>
