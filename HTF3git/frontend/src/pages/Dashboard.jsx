@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, MapPin, Clock, Shield, Ambulance,
-  Users, Phone, Copy, Check, Flame, Building2,
+  Users, Phone, Flame, Building2,
   GraduationCap, Siren, User, Map,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -64,25 +64,22 @@ const ACTIVE_ALERTS = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 const Dashboard = () => {
-  const [copiedId,    setCopiedId]    = useState(null);
-  const [mapOpen,     setMapOpen]     = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const { user } = useAuth();
 
-  // Merge campus defaults with the student's personal contacts
+  // Personal contacts first, then campus defaults
   const personalContacts = (user?.emergencyContacts || []).map((c) => ({
-    name:  c.name,
-    number: c.number,
-    icon:  User,
-    color: "#10b981",
+    name:     c.name,
+    number:   c.number,
+    icon:     User,
+    color:    "#10b981",
     personal: true,
   }));
 
-  const allContacts = [...emergencyContacts, ...personalContacts];
+  const allContacts = [...personalContacts, ...emergencyContacts];
 
-  const handleCopy = (number, name) => {
-    navigator.clipboard.writeText(number);
-    setCopiedId(name);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleCall = (number) => {
+    window.location.href = `tel:${number.replace(/\s/g, "")}`;
   };
 
   const triggerSOS = () => {
@@ -183,7 +180,7 @@ const Dashboard = () => {
             {allContacts.map((contact) => {
               const Icon = contact.icon;
               return (
-                <div key={contact.name} className="contact-item">
+                <div key={contact.name + contact.number} className="contact-item">
                   <div
                     className="contact-icon-wrapper"
                     style={{ background: `${contact.color}15`, color: contact.color }}
@@ -200,11 +197,12 @@ const Dashboard = () => {
                     <span className="contact-number">{contact.number}</span>
                   </div>
                   <button
-                    className={`copy-btn ${copiedId === contact.name ? "copied" : ""}`}
-                    onClick={() => handleCopy(contact.number, contact.name)}
-                    aria-label={`Copy ${contact.name} number`}
+                    className="contact-call-btn"
+                    onClick={() => handleCall(contact.number)}
+                    aria-label={`Call ${contact.name}`}
+                    title={`Call ${contact.number}`}
                   >
-                    {copiedId === contact.name ? <Check size={15} /> : <Copy size={15} />}
+                    <Phone size={14} />
                   </button>
                 </div>
               );

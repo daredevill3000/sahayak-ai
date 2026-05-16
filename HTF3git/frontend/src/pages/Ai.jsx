@@ -349,37 +349,10 @@ const HospitalCallModal = ({ severity, summary, personalContacts, onClose }) => 
 
         {/* ── Campus & Personal Contacts ── */}
         <div className="ec-section">
-          <div className="ec-section-title">
-            <Shield size={13} /> Campus Contacts
-          </div>
-          <div className="ec-list">
-            {CAMPUS_EMERGENCY_CONTACTS.map((c) => {
-              const key = `campus-${c.number}`;
-              const called = calledContacts.includes(key);
-              return (
-                <div key={key} className="ec-item">
-                  <div className="ec-dot" style={{ background: c.color }} />
-                  <div className="ec-info">
-                    <span className="ec-name">{c.name}</span>
-                    <span className="ec-number">{c.number}</span>
-                  </div>
-                  <button
-                    className={`ec-call-btn ${called ? "ec-called" : ""}`}
-                    style={called ? {} : { background: c.color }}
-                    onClick={() => callContact(c.number, key)}
-                  >
-                    <Phone size={13} />
-                    {called ? "Called" : "Call"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Personal contacts — only if user has added any */}
+          {/* Personal contacts first — only if user has added any */}
           {personalContacts.length > 0 && (
             <>
-              <div className="ec-section-title" style={{ marginTop: "0.75rem" }}>
+              <div className="ec-section-title">
                 <Users size={13} /> My Emergency Contacts
               </div>
               <div className="ec-list">
@@ -405,8 +378,37 @@ const HospitalCallModal = ({ severity, summary, personalContacts, onClose }) => 
                   );
                 })}
               </div>
+              <div className="ec-divider" />
             </>
           )}
+
+          {/* Campus contacts after personal */}
+          <div className="ec-section-title" style={{ marginTop: personalContacts.length > 0 ? "0" : undefined }}>
+            <Shield size={13} /> Campus Contacts
+          </div>
+          <div className="ec-list">
+            {CAMPUS_EMERGENCY_CONTACTS.map((c) => {
+              const key = `campus-${c.number}`;
+              const called = calledContacts.includes(key);
+              return (
+                <div key={key} className="ec-item">
+                  <div className="ec-dot" style={{ background: c.color }} />
+                  <div className="ec-info">
+                    <span className="ec-name">{c.name}</span>
+                    <span className="ec-number">{c.number}</span>
+                  </div>
+                  <button
+                    className={`ec-call-btn ${called ? "ec-called" : ""}`}
+                    style={called ? {} : { background: c.color }}
+                    onClick={() => callContact(c.number, key)}
+                  >
+                    <Phone size={13} />
+                    {called ? "Called" : "Call"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Hospitals ── */}
