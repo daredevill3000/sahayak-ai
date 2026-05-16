@@ -2,9 +2,10 @@ import { useState } from "react";
 import {
   AlertTriangle, MapPin, Clock, Shield, Ambulance,
   Users, Phone, Copy, Check, Flame, Building2,
-  GraduationCap, Siren, User,
+  GraduationCap, Siren, User, Map,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import SafetyMap from "../components/SafetyMap";
 
 // ── Campus services (KLS GIT, Belagavi) ──────────────────────────────────────
 const nearbyServices = [
@@ -54,17 +55,17 @@ const quickActions = [
   { id: 2, label: "Call 112",          icon: Phone,         desc: "National emergency helpline"    },
   { id: 3, label: "Alert Warden",      icon: GraduationCap, desc: "Notify hostel / block warden"   },
 ];
-
 // ── Simulated campus alert feed ───────────────────────────────────────────────
 const ACTIVE_ALERTS = [
-  { id: 1, status: "Critical", location: "Lab Block — B204",       time: "2 mins ago",  type: "Chemical Spill"  },
+  { id: 1, status: "Critical", location: "Main Buildiing Chemistry Lab — B204",       time: "2 mins ago",  type: "Chemical Spill"  },
   { id: 2, status: "Urgent",   location: "Hostel Block C — Roof",  time: "8 mins ago",  type: "Medical"         },
   { id: 3, status: "Moderate", location: "Main Gate Parking",      time: "21 mins ago", type: "Accident"        },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 const Dashboard = () => {
-  const [copiedId, setCopiedId] = useState(null);
+  const [copiedId,    setCopiedId]    = useState(null);
+  const [mapOpen,     setMapOpen]     = useState(false);
   const { user } = useAuth();
 
   // Merge campus defaults with the student's personal contacts
@@ -110,7 +111,7 @@ const Dashboard = () => {
       </div>
 
       {/* ── Quick Actions ─────────────────────────────────────────────────── */}
-      <div className="quick-actions-grid">
+      <div className="quick-actions-grid quick-actions-grid-4">
         {quickActions.map((action) => {
           const Icon = action.icon;
           return (
@@ -125,7 +126,29 @@ const Dashboard = () => {
             </div>
           );
         })}
+
+        {/* Safety Map card — highlighted */}
+        <div
+          className="action-card card safety-map-card"
+          onClick={() => setMapOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && setMapOpen(true)}
+          aria-label="Open campus safety map"
+        >
+          <div className="action-icon safety-map-icon">
+            <Map size={24} />
+          </div>
+          <div className="action-content">
+            <h3>Safety Map</h3>
+            <p>Live hazard zones &amp; safe paths</p>
+          </div>
+          <span className="safety-map-badge">⚠ 1 Critical</span>
+        </div>
       </div>
+
+      {/* Safety Map modal */}
+      {mapOpen && <SafetyMap onClose={() => setMapOpen(false)} />}
 
       {/* ── Main Grid ─────────────────────────────────────────────────────── */}
       <div className="dashboard-grid">

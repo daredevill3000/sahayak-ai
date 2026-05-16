@@ -3826,3 +3826,419 @@ button:active {
   transform: translateX(-2px);
   box-shadow: none;
 }
+
+/* ============================================================
+   DASHBOARD — SAFETY MAP CARD
+   ============================================================ */
+
+/* 4-column quick actions on wide screens */
+.quick-actions-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 900px) {
+  .quick-actions-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-actions-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Safety map card — red-tinted highlight */
+.safety-map-card {
+  cursor: pointer;
+  border: 1.5px solid rgba(239, 68, 68, 0.2) !important;
+  background: linear-gradient(135deg, #fff 60%, rgba(239,68,68,0.04)) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.safety-map-card:hover {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(239,68,68,0.08) !important;
+}
+
+.safety-map-icon {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: var(--primary) !important;
+}
+
+/* Pulsing "⚠ 1 Critical" badge */
+.safety-map-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 20px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  animation: badgePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 0 0   rgba(239,68,68,0.3); }
+  50%       { opacity: 0.85; box-shadow: 0 0 0 5px rgba(239,68,68,0);   }
+}
+
+/* ============================================================
+   SAFETY MAP MODAL
+   ============================================================ */
+
+.smap-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.smap-modal {
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+.smap-header {
+  padding: 1.25rem 1.5rem 0;
+  flex-shrink: 0;
+}
+
+.smap-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.smap-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--foreground);
+}
+
+.smap-campus-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  background: rgba(230,57,70,0.08);
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(230,57,70,0.15);
+}
+
+.smap-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
+  color: var(--accents-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.smap-close:hover {
+  background: rgba(230,57,70,0.1);
+  color: var(--primary);
+  border-color: rgba(230,57,70,0.3);
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* ── Danger banner ────────────────────────────────────────── */
+.smap-danger-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.smap-danger-banner strong {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.smap-danger-sub {
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.smap-last-update {
+  margin-left: auto;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.smap-refresh-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.smap-refresh-btn:hover { opacity: 1; transform: none; }
+
+.smap-pulse {
+  animation: bannerPulse 2s ease-in-out infinite;
+}
+
+@keyframes bannerPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.75; }
+}
+
+@keyframes smap-spin {
+  to { transform: rotate(360deg); }
+}
+
+.smap-spin {
+  animation: smap-spin 0.8s linear infinite;
+}
+
+/* ── Body: map + sidebar ──────────────────────────────────── */
+.smap-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* SVG canvas */
+.smap-canvas-wrap {
+  flex: 1;
+  position: relative;
+  background: #f0f4f8;
+  overflow: hidden;
+  min-height: 320px;
+}
+
+.smap-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.smap-attribution {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 0.65rem;
+  color: rgba(0,0,0,0.35);
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* Sidebar */
+.smap-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--accents-2);
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(230,57,70,0.2) transparent;
+}
+
+.smap-sidebar::-webkit-scrollbar       { width: 4px; }
+.smap-sidebar::-webkit-scrollbar-track { background: transparent; }
+.smap-sidebar::-webkit-scrollbar-thumb { background: rgba(230,57,70,0.2); border-radius: 99px; }
+
+.smap-legend-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accents-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.25rem;
+}
+
+/* Hazard list items */
+.smap-hazard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.smap-hazard-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: #f8f9fa;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s, border-color 0.15s;
+  box-shadow: none;
+  color: var(--foreground);
+}
+
+.smap-hazard-item:hover {
+  background: #fff;
+  border-color: var(--hz-color, var(--accents-2));
+  transform: none;
+  box-shadow: none;
+}
+
+.smap-hazard-active {
+  background: #fff !important;
+  border-color: var(--hz-color, var(--primary)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hz-color, var(--primary)) 15%, transparent) !important;
+}
+
+.smap-hz-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.smap-hz-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.smap-hz-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smap-hz-level {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+/* Detail card */
+.smap-detail-card {
+  border-radius: 10px;
+  border: 1.5px solid;
+  padding: 0.65rem 0.75rem;
+  margin-top: 0.25rem;
+  animation: softFadeIn 0.25s ease;
+}
+
+.smap-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  margin-bottom: 0.4rem;
+}
+
+.smap-detail-text {
+  font-size: 0.75rem;
+  color: var(--accents-3);
+  line-height: 1.5;
+}
+
+/* Legend dots */
+.smap-safe-legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  color: var(--accents-3);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.smap-safe-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(34,197,94,0.2);
+  border: 2px solid #22c55e;
+  flex-shrink: 0;
+}
+
+.smap-you-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .smap-body {
+    flex-direction: column;
+  }
+
+  .smap-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--accents-2);
+    max-height: 200px;
+  }
+
+  .smap-modal {
+    max-height: 96vh;
+    border-radius: 20px;
+  }
+}
