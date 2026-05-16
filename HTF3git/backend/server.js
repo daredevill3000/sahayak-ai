@@ -67,9 +67,15 @@ async function sendSMS(recipients, variables) {
     throw new Error("TWILIO_PHONE_NUMBER is not configured in .env");
   }
 
+  // Compressed payload: UID | Coords | Triage — kept under 160 chars
+  const triageTag = variables.triageStatus && variables.triageStatus !== "UNKNOWN"
+    ? ` [${variables.triageStatus}]`
+    : "";
+
   const body =
-    `SOS! From: ${variables.name}. ` +
+    `SOS! From: ${variables.name}${triageTag}. ` +
     `Location: ${variables.location}. ` +
+    `Coords: ${variables.coordinates}. ` +
     `Time: ${variables.time}. ` +
     `Respond immediately! -Sahayaka`;
 
@@ -97,7 +103,7 @@ async function sendSMS(recipients, variables) {
 
 // ─── POST /api/sos ─────────────────────────────────────────────────────────────
 app.post("/api/sos", async (req, res) => {
-  const { name, location, coordinates, extraContacts = [] } = req.body;
+  const { name, location, coordinates, triageStatus = "UNKNOWN", extraContacts = [] } = req.body;
 
   if (!name || !location) {
     return res.status(400).json({ success: false, error: "name and location are required" });
@@ -116,14 +122,17 @@ app.post("/api/sos", async (req, res) => {
     name,
     location,
     coordinates: coordinates || "Not available",
+    triageStatus,
     time: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
   };
 
   console.log(`\n🚨 SOS TRIGGERED`);
-  console.log(`   Name:       ${name}`);
-  console.log(`   Location:   ${location}`);
-  console.log(`   Recipients: ${allRecipients.join(", ")}`);
-  console.log(`   Time:       ${variables.time}\n`);
+  console.log(`   Name:         ${name}`);
+  console.log(`   Location:     ${location}`);
+  console.log(`   Coordinates:  ${variables.coordinates}`);
+  console.log(`   Triage:       ${triageStatus}`);
+  console.log(`   Recipients:   ${allRecipients.join(", ")}`);
+  console.log(`   Time:         ${variables.time}\n`);
 
   try {
     const result = await sendSMS(allRecipients, variables);
