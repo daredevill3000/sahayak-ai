@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import {
   AlertTriangle, MapPin, Phone, Ambulance, Shield, CheckCircle,
   X, Radio, MessageSquare, Wifi, WifiOff, Send, User, Clock,
-  Building2, Siren,
+  Building2, Siren, Mic, MicOff,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Geolocation } from "@capacitor/geolocation";
 import { SmsManager } from "@byteowls/capacitor-sms";
+import { getMqttClient, SOS_TOPIC } from "../utils/mqttClient";
 
 // ── Campus emergency contacts (KLS Gogte Institute of Technology) ─────────────
 const CAMPUS_CONTACTS = [
@@ -57,6 +58,12 @@ const EmergencyButton = () => {
   const [sosActive,        setSosActive]        = useState(false);
   const [sosNotifications, setSosNotifications] = useState([]);
   const [sosComplete,      setSosComplete]      = useState(false);
+
+  const [isRecording,      setIsRecording]      = useState(false);
+  const [sosTranscript,    setSosTranscript]    = useState("");
+  const transcriptRef                           = useRef("");
+  const recognitionRef                          = useRef(null);
+  const currentSosIdRef                         = useRef(null);
 
   // ── Location ────────────────────────────────────────────────────────────────
   const [location,      setLocation]      = useState({ label: "Locating...", coords: null });
@@ -314,6 +321,83 @@ const EmergencyButton = () => {
     setSmsPhase("done");
   };
 
+  // ── Audio Recording ─────────────────────────────────────────────────────────
+  const startRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-IN";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setSosTranscript("");
+      transcriptRef.current = "";
+    };
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      let finalTranscriptChunk = "";
+      
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscriptChunk += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      if (finalTranscriptChunk) {
+        transcriptRef.current += " " + finalTranscriptChunk.trim();
+      }
+      
+      setSosTranscript((transcriptRef.current + " " + interimTranscript).trim());
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.start();
+  };
+
+  const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsRecording(false);
+
+    try {
+      const mqttClient = getMqttClient();
+      // Grab whatever is in the live state to catch un-finalized speech
+      const finalTopic = sosTranscript || transcriptRef.current.trim() || "SOS Emergency";
+      if (mqttClient && mqttClient.connected && currentSosIdRef.current) {
+        const payload = {
+          id: currentSosIdRef.current,
+          status: "Critical",
+          type: `SOS: ${finalTopic}`,
+          location: locationRef.current.label,
+          time: new Date().toISOString(),
+          user: user?.name || "Student",
+          usn: user?.usn || "Unknown ID",
+        };
+        mqttClient.publish(SOS_TOPIC, JSON.stringify(payload), { qos: 1 });
+      }
+    } catch (e) {
+      console.error("[MQTT] Update publish failed:", e);
+    }
+  };
+
   // ── Listen for trigger-sos event from Dashboard ─────────────────────────────
   useEffect(() => {
     const handler = () => triggerSOS();
@@ -332,6 +416,30 @@ const EmergencyButton = () => {
 
     sendSosAlerts(locationRef.current);
 
+    // ── MQTT Real-time Broadcast ─────────────────────────────────────────────
+    const sosId = Date.now();
+    currentSosIdRef.current = sosId;
+
+    try {
+      const mqttClient = getMqttClient();
+      if (mqttClient && mqttClient.connected) {
+        const payload = {
+          id: sosId,
+          status: "Critical",
+          type: "SOS Emergency - Recording Context...",
+          location: locationRef.current.label,
+          time: new Date().toISOString(),
+          user: user?.name || "Student",
+          usn: user?.usn || "Unknown ID",
+        };
+        mqttClient.publish(SOS_TOPIC, JSON.stringify(payload), { qos: 1 });
+      }
+    } catch (e) {
+      console.error("[MQTT] Publish failed:", e);
+    }
+
+    startRecording();
+
     SOS_SEQUENCE.forEach((step) => {
       setTimeout(() => {
         setSosNotifications(prev => [...prev, step]);
@@ -341,6 +449,10 @@ const EmergencyButton = () => {
   };
 
   const closeSOS = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsRecording(false);
     setSosActive(false);
     setSosNotifications([]);
     setSosComplete(false);
@@ -397,6 +509,35 @@ const EmergencyButton = () => {
               <button className="sos-close-btn" onClick={closeSOS} aria-label="Close SOS">
                 <X size={18} />
               </button>
+            </div>
+
+            {/* ── Audio Recording Panel ────────────────────────────────────── */}
+            <div className="sos-recording-panel" style={{ padding: "15px", background: "rgba(239, 68, 68, 0.05)", margin: "0 1.5rem 1rem", borderRadius: "12px", border: "1px solid rgba(239, 68, 68, 0.2)", textAlign: "center" }}>
+              {isRecording ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#ef4444", marginBottom: "10px", fontWeight: "600", fontSize: "0.95rem" }}>
+                    <Mic className="sos-pulse-ring" style={{ background: "none", border: "none" }} size={16} /> Recording Context...
+                  </div>
+                  <p style={{ fontSize: "0.85rem", color: "var(--foreground)", fontStyle: "italic", minHeight: "20px", margin: "0 0 10px 0" }}>
+                    "{sosTranscript || "Speak now..."}"
+                  </p>
+                  <button 
+                    onClick={stopRecording} 
+                    style={{ background: "#ef4444", color: "white", border: "none", padding: "8px 16px", borderRadius: "8px", fontWeight: "600", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.85rem" }}
+                  >
+                    <MicOff size={14} /> Stop Recording
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#10b981", marginBottom: "8px", fontWeight: "600", fontSize: "0.95rem" }}>
+                    <CheckCircle size={16} /> Audio Context Captured
+                  </div>
+                  <p style={{ fontSize: "0.85rem", color: "var(--foreground)", fontStyle: "italic", margin: 0 }}>
+                    "{sosTranscript || "No audio captured."}"
+                  </p>
+                </>
+              )}
             </div>
 
             {/* ── Broadcast sequence ──────────────────────────────────────── */}

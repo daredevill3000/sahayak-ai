@@ -4,16 +4,20 @@ import { useEffect } from "react";
 import Navbar from "./components/Navbar";
 import EmergencyButton from "./components/EmergencyButton";
 import ProtectedRoute from "./components/ProtectedRoute";
+import SecurityProtectedRoute from "./components/SecurityProtectedRoute";
+
 import { AuthProvider } from "./context/AuthContext";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Ai from "./pages/Ai";
+import AdminDashboard from "./pages/AdminDashboard";
+
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const hideNavPaths = ["/", "/auth"];
+  const hideNavPaths = ["/", "/auth", "/admin"];
   const showNav = !hideNavPaths.includes(location.pathname);
 
   useEffect(() => {
@@ -51,6 +55,14 @@ function AppContent() {
           }
         />
         <Route
+          path="/admin"
+          element={
+            <SecurityProtectedRoute>
+              <AdminDashboard />
+            </SecurityProtectedRoute>
+          }
+        />
+        <Route
           path="/triage"
           element={
             <ProtectedRoute>
@@ -58,6 +70,7 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
+
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/auth" replace />} />

@@ -32,14 +32,22 @@ const Auth = () => {
   const { login, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/dashboard", { replace: true });
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated) {
+      // Security users get diverted to admin dashboard
+      if (role === "security") navigate("/admin", { replace: true });
+      else navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, navigate, role]);
+
 
   const handleLogin = (e) => {
     e.preventDefault();
     login({ name: name.trim(), usn: usn.trim(), role }, stayLoggedIn);
-    navigate("/dashboard");
+
+    if (role === "security") navigate("/admin");
+    else navigate("/dashboard");
   };
+
 
   return (
     <div className="auth-container">
