@@ -10,7 +10,7 @@ const ROLES = [
 ];
 
 const USN_PLACEHOLDERS = {
-  student:  "USN — e.g. 2KG22CS001",
+  student:  "USN — e.g. 2GI24CS120",
   faculty:  "Employee ID — e.g. GIT-FAC-042",
   security: "Badge ID — e.g. SEC-007",
 };
