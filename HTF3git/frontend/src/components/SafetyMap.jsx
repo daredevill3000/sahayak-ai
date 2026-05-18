@@ -19,44 +19,44 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-// ── KLS GIT campus centre ─────────────────────────────────────────────────────
-const CAMPUS = [15.8494, 74.4956];
+// ── KLS GIT campus centre (Udyambag, Belagavi) ───────────────────────────────
+const CAMPUS = [15.8202, 74.4756];
 
-// ── Hazard zones — real lat/lng offsets from campus centre ───────────────────
+// ── Hazard zones — real lat/lng on campus ────────────────────────────────────
 const HAZARD_ZONES = [
   {
     id: 1, label: "Chemistry Lab Fire", type: "fire", level: "critical",
     icon: Flame, color: "#ef4444", fillColor: "#ef4444",
-    lat: CAMPUS[0] + 0.0012, lng: CAMPUS[1] + 0.0008,
+    lat: 15.8208, lng: 74.4762,
     radiusM: 60,
     detail: "Active fire in Main Building B-Block Chemistry Lab. Evacuate immediately.",
   },
   {
     id: 2, label: "Electrical Fault", type: "electrical", level: "high",
     icon: Zap, color: "#f59e0b", fillColor: "#f59e0b",
-    lat: CAMPUS[0] - 0.0005, lng: CAMPUS[1] + 0.0015,
+    lat: 15.8197, lng: 74.4768,
     radiusM: 40,
     detail: "High-voltage fault near EEE Dept transformer yard. Keep 50 m distance.",
   },
   {
     id: 3, label: "Chemical Spill", type: "chemical", level: "moderate",
     icon: FlaskConical, color: "#8b5cf6", fillColor: "#8b5cf6",
-    lat: CAMPUS[0] + 0.0018, lng: CAMPUS[1] - 0.0010,
+    lat: 15.8214, lng: 74.4748,
     radiusM: 35,
     detail: "Minor solvent spill in Pharmacy Lab. Avoid Block D corridor.",
   },
   {
     id: 4, label: "Crowd Surge", type: "crowd", level: "low",
     icon: AlertTriangle, color: "#22c55e", fillColor: "#22c55e",
-    lat: CAMPUS[0] - 0.0014, lng: CAMPUS[1] - 0.0006,
+    lat: 15.8193, lng: 74.4751,
     radiusM: 30,
     detail: "Dense crowd near Main Gate. Use alternate exit via Sports Ground.",
   },
 ];
 
 const SAFE_ZONES = [
-  { id: "s1", label: "Assembly Point A", lat: CAMPUS[0] + 0.0022, lng: CAMPUS[1] + 0.0020 },
-  { id: "s2", label: "Assembly Point B", lat: CAMPUS[0] - 0.0020, lng: CAMPUS[1] + 0.0018 },
+  { id: "s1", label: "Assembly Point A", lat: 15.8218, lng: 74.4770 },
+  { id: "s2", label: "Assembly Point B", lat: 15.8188, lng: 74.4768 },
 ];
 
 const DANGER_META = {
@@ -97,13 +97,23 @@ const makeSafeIcon = () => L.divIcon({
 });
 
 // ── Inner component: pans map to user position ────────────────────────────────
-const MapController = ({ userPos, shouldFollow }) => {
+const MapController = ({ userPos, shouldFollow, selected }) => {
   const map = useMap();
+
+  // Fly to selected hazard zone when sidebar item is clicked
+  useEffect(() => {
+    if (selected) {
+      map.flyTo([selected.lat, selected.lng], 18, { animate: true, duration: 1.2 });
+    }
+  }, [selected, map]);
+
+  // Follow user position when follow mode is on
   useEffect(() => {
     if (userPos && shouldFollow) {
       map.setView([userPos.lat, userPos.lng], map.getZoom(), { animate: true });
     }
   }, [userPos, shouldFollow, map]);
+
   return null;
 };
 
@@ -227,8 +237,8 @@ const SafetyMap = ({ onClose }) => {
           {/* Leaflet map */}
           <div className="smap-canvas-wrap" style={{ position: "relative" }}>
             <MapContainer
-              center={userPos ? [userPos.lat, userPos.lng] : CAMPUS}
-              zoom={17}
+              center={CAMPUS}
+              zoom={18}
               style={{ width: "100%", height: "100%", minHeight: 320 }}
               zoomControl={true}
               attributionControl={true}
@@ -240,8 +250,8 @@ const SafetyMap = ({ onClose }) => {
                 maxZoom={19}
               />
 
-              {/* Auto-pan controller */}
-              <MapController userPos={userPos} shouldFollow={follow} />
+              {/* Auto-pan + fly-to controller */}
+              <MapController userPos={userPos} shouldFollow={follow} selected={selected} />
 
               {/* Hazard zone circles */}
               {HAZARD_ZONES.map(z => {
@@ -300,8 +310,7 @@ const SafetyMap = ({ onClose }) => {
                     <Popup>
                       <strong style={{ color: "#3b82f6" }}>📍 Your Location</strong>
                       <p style={{ fontSize: "0.75rem", margin: "4px 0 0", color: "#555" }}>
-                        {userPos.lat.toFixed(6)}°N, {userPos.lng.toFixed(6)}°E<br />
-                        ±{Math.round(userPos.accuracy)} m accuracy
+                        {userPos.lat.toFixed(6)}°N, {userPos.lng.toFixed(6)}°E
                       </p>
                     </Popup>
                   </Marker>
@@ -341,7 +350,6 @@ const SafetyMap = ({ onClose }) => {
                 <div className="smap-coords-label"><LocateFixed size={11} /> Your Location</div>
                 <div className="smap-coords-val">{userPos.lat.toFixed(6)}°N</div>
                 <div className="smap-coords-val">{userPos.lng.toFixed(6)}°E</div>
-                <div className="smap-coords-acc">±{Math.round(userPos.accuracy)} m accuracy</div>
               </div>
             )}
 
@@ -374,7 +382,12 @@ const SafetyMap = ({ onClose }) => {
                     key={z.id}
                     className={`smap-hazard-item ${isActive ? "smap-hazard-active" : ""} ${inside ? "smap-hazard-inside" : ""}`}
                     style={{ "--hz-color": z.color }}
-                    onClick={() => setSelected(isActive ? null : z)}
+                    onClick={() => {
+                      const next = isActive ? null : z;
+                      setSelected(next);
+                      // Pause follow-mode so the fly animation isn't overridden by GPS updates
+                      if (next) setFollow(false);
+                    }}
                   >
                     <div className="smap-hz-icon" style={{ background: `${z.color}18`, color: z.color }}>
                       <Icon size={14} />

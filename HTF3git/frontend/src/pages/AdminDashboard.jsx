@@ -1,7 +1,199 @@
-import { useMemo, useState, useEffect } from "react";
-import { Shield, LogOut, AlertTriangle, MapPin, Phone, Users, Clock, ChevronRight, Activity, Bell } from "lucide-react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { Shield, LogOut, AlertTriangle, MapPin, Phone, Users, Clock, ChevronRight, Activity, Bell, Flame, Zap, FlaskConical, Navigation, LocateFixed } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getMqttClient, SOS_TOPIC } from "../utils/mqttClient";
+import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet default icon paths in Vite
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+// KLS GIT campus centre
+const CAMPUS = [15.8202, 74.4756];
+
+const ADMIN_HAZARDS = [
+  { id: 1, label: "Chemistry Lab Fire",  level: "critical", color: "#ef4444", lat: 15.8208, lng: 74.4762, r: 60,  detail: "Active fire — Main Building B-Block Chemistry Lab." },
+  { id: 2, label: "Electrical Fault",    level: "high",     color: "#f59e0b", lat: 15.8197, lng: 74.4768, r: 40,  detail: "High-voltage fault near EEE Dept transformer yard." },
+  { id: 3, label: "Chemical Spill",      level: "moderate", color: "#8b5cf6", lat: 15.8214, lng: 74.4748, r: 35,  detail: "Solvent spill in Pharmacy Lab — Block D corridor." },
+  { id: 4, label: "Crowd Surge",         level: "low",      color: "#22c55e", lat: 15.8193, lng: 74.4751, r: 30,  detail: "Dense crowd near Main Gate." },
+];
+
+const ADMIN_SAFE_ZONES = [
+  { id: "s1", label: "Assembly Point A", lat: 15.8218, lng: 74.4770 },
+  { id: "s2", label: "Assembly Point B", lat: 15.8188, lng: 74.4768 },
+];
+
+const safeIcon = L.divIcon({
+  className: "",
+  html: `<div style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3))">🛡</div>`,
+  iconSize: [24, 24], iconAnchor: [12, 12],
+});
+
+// Haversine
+const haversine = (lat1,lng1,lat2,lng2) => {
+  const R=6371000, φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
+  const Δφ=(lat2-lat1)*Math.PI/180, Δλ=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+};
+
+// User dot icon
+const userDotIcon = L.divIcon({
+  className: "",
+  html: `<div style="width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 2px 8px rgba(59,130,246,.5)"></div>`,
+  iconSize: [16,16], iconAnchor: [8,8],
+});
+
+// Sub-component: pans to user when follow is on
+const FollowController = ({ pos, follow }) => {
+  const map = useMap();
+  useEffect(() => { if (pos && follow) map.setView([pos.lat, pos.lng], map.getZoom(), { animate: true }); }, [pos, follow, map]);
+  return null;
+};
+
+// The actual Leaflet map panel
+const AdminLiveMap = () => {
+  const [userPos,  setUserPos]  = useState(null);
+  const [gpsOk,    setGpsOk]    = useState(false);
+  const [follow,   setFollow]   = useState(true);
+  const watchRef = useRef(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    watchRef.current = navigator.geolocation.watchPosition(
+      (p) => { setUserPos({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); setGpsOk(true); },
+      () => setGpsOk(false),
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+    );
+    return () => { if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current); };
+  }, []);
+
+  const dangerZones = userPos
+    ? ADMIN_HAZARDS.filter(z => haversine(userPos.lat, userPos.lng, z.lat, z.lng) <= z.r)
+    : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", flex: 1 }}>
+      {/* Status bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "3px 10px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 700,
+          background: gpsOk ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.1)",
+          color: gpsOk ? "#16a34a" : "#dc2626",
+          border: `1px solid ${gpsOk ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.2)"}`,
+        }}>
+          <LocateFixed size={11} /> {gpsOk ? "GPS Live" : "GPS Acquiring…"}
+        </span>
+        {userPos && (
+          <span style={{ fontSize: "0.72rem", color: "var(--accents-3)", fontFamily: "monospace", fontWeight: 600 }}>
+            {userPos.lat.toFixed(5)}°N · {userPos.lng.toFixed(5)}°E
+          </span>
+        )}
+        {dangerZones.length > 0 && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "3px 10px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 800,
+            background: "rgba(239,68,68,0.1)", color: "#dc2626",
+            border: "1px solid rgba(239,68,68,0.3)", animation: "bannerPulse 1.5s ease-in-out infinite",
+          }}>
+            ⚠ INSIDE HAZARD: {dangerZones.map(z => z.label).join(", ")}
+          </span>
+        )}
+        <button
+          onClick={() => setFollow(f => !f)}
+          style={{
+            marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 700,
+            background: follow ? "rgba(59,130,246,0.12)" : "rgba(0,0,0,0.05)",
+            color: follow ? "#2563eb" : "var(--accents-3)",
+            border: `1px solid ${follow ? "rgba(59,130,246,0.3)" : "rgba(0,0,0,0.1)"}`,
+            cursor: "pointer", boxShadow: "none",
+          }}
+        >
+          <Navigation size={11} /> {follow ? "Following" : "Follow Me"}
+        </button>
+      </div>
+
+      {/* Leaflet map */}
+      <div style={{ flex: 1, minHeight: 420, borderRadius: 16, overflow: "hidden", border: "1px solid var(--accents-2)" }}>
+        <MapContainer
+          center={userPos ? [userPos.lat, userPos.lng] : CAMPUS}
+          zoom={17}
+          style={{ width: "100%", height: "100%" }}
+          zoomControl
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            maxZoom={19}
+          />
+          <FollowController pos={userPos} follow={follow} />
+
+          {/* Hazard circles */}
+          {ADMIN_HAZARDS.map(z => (
+            <Circle key={z.id} center={[z.lat, z.lng]} radius={z.r}
+              pathOptions={{ color: z.color, fillColor: z.color, fillOpacity: 0.2, weight: 2, dashArray: "6 4" }}>
+              <Popup>
+                <strong style={{ color: z.color }}>{z.label}</strong>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: z.color, marginBottom: 4 }}>{z.level.toUpperCase()}</div>
+                <p style={{ fontSize: "0.78rem", margin: 0, color: "#444" }}>{z.detail}</p>
+              </Popup>
+            </Circle>
+          ))}
+
+          {/* Assembly points */}
+          {ADMIN_SAFE_ZONES.map(s => (
+            <Marker key={s.id} position={[s.lat, s.lng]} icon={safeIcon}>
+              <Popup><strong style={{ color: "#16a34a" }}>{s.label}</strong></Popup>
+            </Marker>
+          ))}
+
+          {/* Live user dot */}
+          {userPos && (
+            <>
+              <Marker position={[userPos.lat, userPos.lng]} icon={userDotIcon} zIndexOffset={1000}>
+                <Popup>
+                  <strong style={{ color: "#3b82f6" }}>📍 Your Location</strong>
+                  <p style={{ fontSize: "0.75rem", margin: "4px 0 0", color: "#555" }}>
+                    {userPos.lat.toFixed(6)}°N, {userPos.lng.toFixed(6)}°E
+                  </p>
+                </Popup>
+              </Marker>
+              <Circle center={[userPos.lat, userPos.lng]} radius={userPos.acc || 10}
+                pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.07, weight: 1, dashArray: "3 3" }} />
+            </>
+          )}
+        </MapContainer>
+      </div>
+
+      {/* Hazard legend */}
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        {ADMIN_HAZARDS.map(z => (
+          <span key={z.id} style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            padding: "3px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700,
+            background: `${z.color}12`, color: z.color, border: `1px solid ${z.color}30`,
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: z.color, display: "inline-block" }} />
+            {z.label}
+          </span>
+        ))}
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "3px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 700,
+          background: "rgba(34,197,94,0.1)", color: "#16a34a", border: "1px solid rgba(34,197,94,0.25)",
+        }}>🛡 Assembly Points</span>
+      </div>
+    </div>
+  );
+};
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -253,13 +445,10 @@ const AdminDashboard = () => {
                 <div className="panel-header">
                   <div>
                     <h2>Live Safety Map</h2>
-                    <p className="panel-subtitle">Geospatial overview of campus</p>
+                    <p className="panel-subtitle">Geospatial overview of campus · KLS GIT, Belagavi</p>
                   </div>
                 </div>
-                <div className="map-placeholder">
-                  <div className="radar"></div>
-                  <p>Map Interface Initializing...</p>
-                </div>
+                <AdminLiveMap />
               </div>
             )}
 
