@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   MapContainer, TileLayer, Circle, Marker, Popup,
-  useMap, useMapEvents,
+  Polyline, useMap,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   X, Flame, Zap, FlaskConical, AlertTriangle,
-  ShieldCheck, Navigation, RefreshCw, Info,
-  LocateFixed, WifiOff, Siren,
+  Navigation, RefreshCw, Info,
+  LocateFixed, WifiOff, Siren, Route,
 } from "lucide-react";
+import { subscribeSosMarkers, getSosMarkers } from "../utils/mqttClient";
 
 // ── Fix leaflet's broken default icon paths in Vite ──────────────────────────
 delete L.Icon.Default.prototype._getIconUrl;
@@ -96,6 +97,52 @@ const makeSafeIcon = () => L.divIcon({
   iconAnchor: [14, 14],
 });
 
+// ── Custom DivIcon for SOS alert markers ─────────────────────────────────────
+const makeSosIcon = () => L.divIcon({
+  className: "",
+  html: `<div class="lmap-sos-pin">🚨</div>`,
+  iconSize:   [32, 32],
+  iconAnchor: [16, 16],
+});
+
+// ── Compute safe route: straight line from user → nearest assembly point ──────
+// Avoids routing through hazard zone centres by adding a waypoint offset if needed
+const computeSafeRoute = (userPos, assemblyPoints, hazardZones) => {
+  if (!userPos) return null;
+
+  // Pick nearest assembly point
+  let nearest = null;
+  let minDist = Infinity;
+  for (const pt of assemblyPoints) {
+    const d = haversine(userPos.lat, userPos.lng, pt.lat, pt.lng);
+    if (d < minDist) { minDist = d; nearest = pt; }
+  }
+  if (!nearest) return null;
+
+  const start = [userPos.lat, userPos.lng];
+  const end   = [nearest.lat, nearest.lng];
+
+  // Check if direct path passes through any hazard zone centre
+  // Simple midpoint check — if midpoint is inside a hazard, add a lateral waypoint
+  const midLat = (userPos.lat + nearest.lat) / 2;
+  const midLng = (userPos.lng + nearest.lng) / 2;
+
+  const blocked = hazardZones.find(z =>
+    haversine(midLat, midLng, z.lat, z.lng) < z.radiusM * 1.5
+  );
+
+  if (blocked) {
+    // Offset waypoint perpendicular to the direct path
+    const dLat = nearest.lat - userPos.lat;
+    const dLng = nearest.lng - userPos.lng;
+    const perpLat = midLat - dLng * 0.0003;
+    const perpLng = midLng + dLat * 0.0003;
+    return { points: [start, [perpLat, perpLng], end], destination: nearest };
+  }
+
+  return { points: [start, end], destination: nearest };
+};
+
 // ── Inner component: pans map to user position ────────────────────────────────
 const MapController = ({ userPos, shouldFollow, selected }) => {
   const map = useMap();
@@ -127,7 +174,9 @@ const SafetyMap = ({ onClose }) => {
   const [selected,   setSelected]   = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
-  const [follow,     setFollow]     = useState(true); // auto-pan to user
+  const [follow,     setFollow]     = useState(true);
+  const [sosMarkers, setSosMarkers] = useState(() => getSosMarkers());
+  const [showRoute,  setShowRoute]  = useState(true);
 
   // Which hazard zones is the user currently inside?
   const dangerZones = userPos
@@ -162,6 +211,17 @@ const SafetyMap = ({ onClose }) => {
     };
   }, []);
 
+  // ── Subscribe to live SOS markers via MQTT ─────────────────────────────────
+  useEffect(() => {
+    const unsub = subscribeSosMarkers(markers => setSosMarkers({ ...markers }));
+    return unsub;
+  }, []);
+
+  // ── Compute safe route whenever user position changes ───────────────────────
+  const safeRoute = userPos
+    ? computeSafeRoute(userPos, SAFE_ZONES, HAZARD_ZONES)
+    : null;
+
   // ── Keyboard close ──────────────────────────────────────────────────────────
   useEffect(() => {
     const h = (e) => { if (e.key === "Escape") onClose(); };
@@ -178,6 +238,7 @@ const SafetyMap = ({ onClose }) => {
 
   const userIcon = useRef(makeUserIcon());
   const safeIcon = useRef(makeSafeIcon());
+  const sosIcon  = useRef(makeSosIcon());
 
   return (
     <div
@@ -299,6 +360,42 @@ const SafetyMap = ({ onClose }) => {
                 </Marker>
               ))}
 
+              {/* ── SOS alert markers from MQTT ─────────────────────────── */}
+              {Object.values(sosMarkers).map(sos => (
+                <Marker key={sos.id} position={[sos.lat, sos.lng]} icon={sosIcon.current} zIndexOffset={900}>
+                  <Popup>
+                    <div style={{ minWidth: 180 }}>
+                      <strong style={{ color: "#ef4444", fontSize: "0.9rem" }}>🚨 SOS Alert</strong>
+                      <div style={{ fontSize: "0.78rem", color: "#444", marginTop: 4, lineHeight: 1.5 }}>
+                        <div><b>Student:</b> {sos.user} {sos.usn ? `(${sos.usn})` : ""}</div>
+                        <div><b>Location:</b> {sos.label}</div>
+                        <div><b>Type:</b> {sos.type}</div>
+                        <div><b>Time:</b> {new Date(sos.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div style={{ marginTop: 4, fontFamily: "monospace", fontSize: "0.72rem", color: "#888" }}>
+                          {sos.lat.toFixed(5)}°N, {sos.lng.toFixed(5)}°E
+                        </div>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+
+              {/* ── Safe route polyline (user → nearest assembly point) ─── */}
+              {safeRoute && showRoute && (
+                <>
+                  {/* Glow shadow */}
+                  <Polyline
+                    positions={safeRoute.points}
+                    pathOptions={{ color: "#22c55e", weight: 8, opacity: 0.15, dashArray: null }}
+                  />
+                  {/* Main route line */}
+                  <Polyline
+                    positions={safeRoute.points}
+                    pathOptions={{ color: "#22c55e", weight: 3, opacity: 0.9, dashArray: "10 6" }}
+                  />
+                </>
+              )}
+
               {/* Live user marker */}
               {userPos && (
                 <>
@@ -336,6 +433,17 @@ const SafetyMap = ({ onClose }) => {
               <LocateFixed size={16} />
             </button>
 
+            {/* Safe route toggle */}
+            {safeRoute && (
+              <button
+                className={`smap-route-btn ${showRoute ? "smap-route-active" : ""}`}
+                onClick={() => setShowRoute(r => !r)}
+                title={showRoute ? "Hide safe route" : "Show safe route to assembly point"}
+              >
+                <Route size={16} />
+              </button>
+            )}
+
             <div className="smap-attribution" style={{ zIndex: 1000 }}>
               Live GPS · KLS GIT, Belagavi
             </div>
@@ -362,6 +470,42 @@ const SafetyMap = ({ onClose }) => {
                   <p>{dangerZones[0].detail}</p>
                 </div>
               </div>
+            )}
+
+            {/* Safe route info */}
+            {safeRoute && showRoute && (
+              <div className="smap-route-card">
+                <div className="smap-route-header">
+                  <Route size={13} />
+                  <strong>Safe Route Active</strong>
+                </div>
+                <p className="smap-route-desc">
+                  Head to <b>{safeRoute.destination.label}</b> — follow the green dashed line on the map.
+                </p>
+              </div>
+            )}
+
+            {/* Live SOS alerts */}
+            {Object.keys(sosMarkers).length > 0 && (
+              <>
+                <div className="smap-legend-title" style={{ color: "#ef4444", borderColor: "rgba(239,68,68,0.2)" }}>
+                  <Siren size={13} /> Live SOS Alerts ({Object.keys(sosMarkers).length})
+                </div>
+                <div className="smap-sos-list">
+                  {Object.values(sosMarkers).map(sos => (
+                    <div key={sos.id} className="smap-sos-item">
+                      <span className="smap-sos-emoji">🚨</span>
+                      <div className="smap-sos-info">
+                        <span className="smap-sos-user">{sos.user}</span>
+                        <span className="smap-sos-loc">{sos.label}</span>
+                      </div>
+                      <span className="smap-sos-time">
+                        {new Date(sos.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
 
             <div className="smap-legend-title">
@@ -427,6 +571,16 @@ const SafetyMap = ({ onClose }) => {
               <div className="smap-you-dot" />
               <span>Your live location</span>
             </div>
+            <div className="smap-safe-legend">
+              <span style={{ fontSize: "0.9rem" }}>🚨</span>
+              <span>SOS Alert location</span>
+            </div>
+            {safeRoute && (
+              <div className="smap-safe-legend">
+                <div style={{ width: 18, height: 3, background: "#22c55e", borderRadius: 2, flexShrink: 0 }} />
+                <span>Safe route to assembly</span>
+              </div>
+            )}
           </div>
         </div>
 

@@ -4494,6 +4494,126 @@ button:active {
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));
 }
 
+/* ── SOS alert pin ────────────────────────────────────────── */
+.lmap-sos-pin {
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(239,68,68,0.6));
+  animation: sosPinPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sosPinPulse {
+  0%, 100% { transform: scale(1);    filter: drop-shadow(0 2px 6px rgba(239,68,68,0.6)); }
+  50%       { transform: scale(1.25); filter: drop-shadow(0 4px 12px rgba(239,68,68,0.9)); }
+}
+
+/* ── Safe route toggle button ─────────────────────────────── */
+.smap-route-btn {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 0.75rem;
+  z-index: 1000;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: white;
+  border: 1px solid rgba(0,0,0,0.12);
+  color: var(--accents-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: all 0.2s;
+}
+
+.smap-route-active {
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
+  border-color: rgba(34,197,94,0.4) !important;
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.15) !important;
+}
+
+/* ── Safe route info card ─────────────────────────────────── */
+.smap-route-card {
+  background: rgba(34,197,94,0.07);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.smap-route-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #16a34a;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.smap-route-desc {
+  font-size: 0.78rem;
+  color: var(--foreground);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── SOS markers list in sidebar ──────────────────────────── */
+.smap-sos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.smap-sos-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.smap-sos-emoji {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.smap-sos-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.smap-sos-user {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ef4444;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smap-sos-loc {
+  font-size: 0.7rem;
+  color: var(--accents-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smap-sos-time {
+  font-size: 0.68rem;
+  color: var(--accents-3);
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
 /* ── Follow-me button active state ───────────────────────── */
 .smap-follow-active {
   background: #eff6ff !important;

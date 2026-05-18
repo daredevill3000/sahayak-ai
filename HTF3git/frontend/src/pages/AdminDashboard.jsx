@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { Shield, LogOut, AlertTriangle, MapPin, Phone, Users, Clock, ChevronRight, Activity, Bell, Flame, Zap, FlaskConical, Navigation, LocateFixed } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { getMqttClient, SOS_TOPIC } from "../utils/mqttClient";
+import { getMqttClient, SOS_TOPIC, subscribeSosMarkers, getSosMarkers } from "../utils/mqttClient";
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -50,6 +50,13 @@ const userDotIcon = L.divIcon({
   iconSize: [16,16], iconAnchor: [8,8],
 });
 
+// SOS alert icon
+const sosPinIcon = L.divIcon({
+  className: "",
+  html: `<div class="lmap-sos-pin">🚨</div>`,
+  iconSize: [32,32], iconAnchor: [16,16],
+});
+
 // Sub-component: pans to user when follow is on
 const FollowController = ({ pos, follow }) => {
   const map = useMap();
@@ -59,9 +66,10 @@ const FollowController = ({ pos, follow }) => {
 
 // The actual Leaflet map panel
 const AdminLiveMap = () => {
-  const [userPos,  setUserPos]  = useState(null);
-  const [gpsOk,    setGpsOk]    = useState(false);
-  const [follow,   setFollow]   = useState(true);
+  const [userPos,    setUserPos]    = useState(null);
+  const [gpsOk,      setGpsOk]      = useState(false);
+  const [follow,     setFollow]     = useState(true);
+  const [sosMarkers, setSosMarkers] = useState(() => getSosMarkers());
   const watchRef = useRef(null);
 
   useEffect(() => {
@@ -72,6 +80,12 @@ const AdminLiveMap = () => {
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
     return () => { if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current); };
+  }, []);
+
+  // Subscribe to live SOS markers
+  useEffect(() => {
+    const unsub = subscribeSosMarkers(markers => setSosMarkers({ ...markers }));
+    return unsub;
   }, []);
 
   const dangerZones = userPos
@@ -152,6 +166,25 @@ const AdminLiveMap = () => {
           {ADMIN_SAFE_ZONES.map(s => (
             <Marker key={s.id} position={[s.lat, s.lng]} icon={safeIcon}>
               <Popup><strong style={{ color: "#16a34a" }}>{s.label}</strong></Popup>
+            </Marker>
+          ))}
+
+          {/* Live SOS alert markers */}
+          {Object.values(sosMarkers).map(sos => (
+            <Marker key={sos.id} position={[sos.lat, sos.lng]} icon={sosPinIcon} zIndexOffset={900}>
+              <Popup>
+                <div style={{ minWidth: 180 }}>
+                  <strong style={{ color: "#ef4444", fontSize: "0.9rem" }}>🚨 SOS Alert</strong>
+                  <div style={{ fontSize: "0.78rem", color: "#444", marginTop: 4, lineHeight: 1.5 }}>
+                    <div><b>Student:</b> {sos.user} {sos.usn ? `(${sos.usn})` : ""}</div>
+                    <div><b>Location:</b> {sos.label}</div>
+                    <div><b>Time:</b> {new Date(sos.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div style={{ marginTop: 4, fontFamily: "monospace", fontSize: "0.72rem", color: "#888" }}>
+                      {sos.lat.toFixed(5)}°N, {sos.lng.toFixed(5)}°E
+                    </div>
+                  </div>
+                </div>
+              </Popup>
             </Marker>
           ))}
 
