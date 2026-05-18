@@ -105,14 +105,36 @@ const makeSosIcon = () => L.divIcon({
   iconAnchor: [16, 16],
 });
 
-// ── Compute safe route: straight line from user → nearest assembly point ──────
-// Avoids routing through hazard zone centres by adding a waypoint offset if needed
-const computeSafeRoute = (userPos, assemblyPoints, hazardZones) => {
+// ── OSRM road routing — fetches real road geometry from public OSRM API ────────
+// Returns array of [lat, lng] points following actual roads.
+// Falls back to straight-line if offline or API fails.
+const fetchRoadRoute = async (fromLat, fromLng, toLat, toLng) => {
+  try {
+    const url =
+      `https://router.project-osrm.org/route/v1/foot/` +
+      `${fromLng},${fromLat};${toLng},${toLat}` +
+      `?overview=full&geometries=geojson&steps=false`;
+
+    const res  = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) throw new Error(`OSRM ${res.status}`);
+    const data = await res.json();
+
+    if (data.code !== "Ok" || !data.routes?.[0]) throw new Error("No route");
+
+    // GeoJSON coords are [lng, lat] — flip to [lat, lng] for Leaflet
+    const coords = data.routes[0].geometry.coordinates;
+    return coords.map(([lng, lat]) => [lat, lng]);
+  } catch (err) {
+    console.warn("OSRM routing failed, using straight-line fallback:", err.message);
+    return null; // caller handles fallback
+  }
+};
+
+// ── Straight-line fallback (hazard-aware waypoint) ────────────────────────────
+const computeStraightRoute = (userPos, assemblyPoints, hazardZones) => {
   if (!userPos) return null;
 
-  // Pick nearest assembly point
-  let nearest = null;
-  let minDist = Infinity;
+  let nearest = null, minDist = Infinity;
   for (const pt of assemblyPoints) {
     const d = haversine(userPos.lat, userPos.lng, pt.lat, pt.lng);
     if (d < minDist) { minDist = d; nearest = pt; }
@@ -121,9 +143,6 @@ const computeSafeRoute = (userPos, assemblyPoints, hazardZones) => {
 
   const start = [userPos.lat, userPos.lng];
   const end   = [nearest.lat, nearest.lng];
-
-  // Check if direct path passes through any hazard zone centre
-  // Simple midpoint check — if midpoint is inside a hazard, add a lateral waypoint
   const midLat = (userPos.lat + nearest.lat) / 2;
   const midLng = (userPos.lng + nearest.lng) / 2;
 
@@ -132,15 +151,14 @@ const computeSafeRoute = (userPos, assemblyPoints, hazardZones) => {
   );
 
   if (blocked) {
-    // Offset waypoint perpendicular to the direct path
     const dLat = nearest.lat - userPos.lat;
     const dLng = nearest.lng - userPos.lng;
     const perpLat = midLat - dLng * 0.0003;
     const perpLng = midLng + dLat * 0.0003;
-    return { points: [start, [perpLat, perpLng], end], destination: nearest };
+    return { points: [start, [perpLat, perpLng], end], destination: nearest, isRoad: false };
   }
 
-  return { points: [start, end], destination: nearest };
+  return { points: [start, end], destination: nearest, isRoad: false };
 };
 
 // ── Inner component: pans map to user position ────────────────────────────────
@@ -177,6 +195,8 @@ const SafetyMap = ({ onClose }) => {
   const [follow,     setFollow]     = useState(true);
   const [sosMarkers, setSosMarkers] = useState(() => getSosMarkers());
   const [showRoute,  setShowRoute]  = useState(true);
+  const [safeRoute,  setSafeRoute]  = useState(null);
+  const routeFetchRef = useRef(null); // abort stale fetches
 
   // Which hazard zones is the user currently inside?
   const dangerZones = userPos
@@ -217,10 +237,41 @@ const SafetyMap = ({ onClose }) => {
     return unsub;
   }, []);
 
-  // ── Compute safe route whenever user position changes ───────────────────────
-  const safeRoute = userPos
-    ? computeSafeRoute(userPos, SAFE_ZONES, HAZARD_ZONES)
-    : null;
+  // ── Fetch road route via OSRM whenever user position changes ───────────────
+  useEffect(() => {
+    if (!userPos) { setSafeRoute(null); return; }
+
+    // Find nearest assembly point
+    let nearest = null, minDist = Infinity;
+    for (const pt of SAFE_ZONES) {
+      const d = haversine(userPos.lat, userPos.lng, pt.lat, pt.lng);
+      if (d < minDist) { minDist = d; nearest = pt; }
+    }
+    if (!nearest) return;
+
+    let cancelled = false;
+
+    const loadRoute = async () => {
+      // Try real road routing first
+      const roadPoints = await fetchRoadRoute(
+        userPos.lat, userPos.lng,
+        nearest.lat, nearest.lng
+      );
+
+      if (cancelled) return;
+
+      if (roadPoints && roadPoints.length > 1) {
+        setSafeRoute({ points: roadPoints, destination: nearest, isRoad: true });
+      } else {
+        // Fallback to straight-line with hazard avoidance
+        const fallback = computeStraightRoute(userPos, SAFE_ZONES, HAZARD_ZONES);
+        setSafeRoute(fallback);
+      }
+    };
+
+    loadRoute();
+    return () => { cancelled = true; };
+  }, [userPos?.lat, userPos?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard close ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -386,12 +437,19 @@ const SafetyMap = ({ onClose }) => {
                   {/* Glow shadow */}
                   <Polyline
                     positions={safeRoute.points}
-                    pathOptions={{ color: "#22c55e", weight: 8, opacity: 0.15, dashArray: null }}
+                    pathOptions={{ color: "#22c55e", weight: 10, opacity: 0.12, dashArray: null }}
                   />
-                  {/* Main route line */}
+                  {/* Main route line — solid for road, dashed for fallback */}
                   <Polyline
                     positions={safeRoute.points}
-                    pathOptions={{ color: "#22c55e", weight: 3, opacity: 0.9, dashArray: "10 6" }}
+                    pathOptions={{
+                      color:     "#22c55e",
+                      weight:    4,
+                      opacity:   0.95,
+                      dashArray: safeRoute.isRoad ? null : "10 6",
+                      lineCap:   "round",
+                      lineJoin:  "round",
+                    }}
                   />
                 </>
               )}
@@ -478,9 +536,13 @@ const SafetyMap = ({ onClose }) => {
                 <div className="smap-route-header">
                   <Route size={13} />
                   <strong>Safe Route Active</strong>
+                  {safeRoute.isRoad
+                    ? <span className="smap-route-tag smap-route-road">Road</span>
+                    : <span className="smap-route-tag smap-route-fallback">Direct</span>
+                  }
                 </div>
                 <p className="smap-route-desc">
-                  Head to <b>{safeRoute.destination.label}</b> — follow the green dashed line on the map.
+                  Head to <b>{safeRoute.destination.label}</b> — follow the green line on the map.
                 </p>
               </div>
             )}

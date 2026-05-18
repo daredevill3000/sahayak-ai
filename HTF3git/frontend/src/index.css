@@ -4772,3 +4772,27 @@ button:active {
   background: var(--accents-2);
   margin: 0.65rem 0;
 }
+
+/* ── Safe route card — road/fallback tag ─────────────────── */
+.smap-route-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+
+.smap-route-road {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.smap-route-fallback {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
