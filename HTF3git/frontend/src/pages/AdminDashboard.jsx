@@ -1218,19 +1218,39 @@ const AdminDashboard = () => {
           to { opacity: 1; transform: translateX(0); }
         }
 
-        /* Responsive Design */
+        /* ── Responsive: Tablet (≤1024px) ── */
         @media (max-width: 1024px) {
+          .admin-layout {
+            padding: 1rem;
+          }
+
           .admin-content-grid {
             grid-template-columns: 1fr;
           }
+
+          /* Sidebar becomes a horizontal scrollable tab bar */
+          .admin-sidebar {
+            gap: 0.75rem;
+          }
+
           .admin-tabs-vertical {
             flex-direction: row;
             overflow-x: auto;
             padding: 0.5rem;
+            gap: 0.25rem;
+            border-radius: 16px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
           }
+          .admin-tabs-vertical::-webkit-scrollbar { display: none; }
+
           .admin-tab {
             white-space: nowrap;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            flex-shrink: 0;
           }
+
           .tab-indicator {
             left: 50%;
             top: auto;
@@ -1240,26 +1260,204 @@ const AdminDashboard = () => {
             height: 3px;
             border-radius: 4px 4px 0 0;
           }
+
           .sidebar-stats {
             flex-direction: row;
           }
           .stat-card {
             flex: 1;
+            padding: 1rem;
+          }
+          .stat-value {
+            font-size: 2rem;
+          }
+
+          .panel-glass {
+            padding: 1.5rem;
           }
         }
 
+        /* ── Responsive: Mobile (≤768px) ── */
         @media (max-width: 768px) {
-          .header-right {
+          .admin-layout {
+            padding: 0.75rem;
+            padding-bottom: 1.5rem;
+          }
+
+          /* Header: show only logo + logout on mobile */
+          .admin-header-glass {
+            padding: 0.75rem 1rem;
+            border-radius: 16px;
+          }
+
+          .brand-text h1 {
+            font-size: 1rem;
+          }
+          .brand-text span {
             display: none;
           }
+
+          /* Hide time, user info, status badge — keep only avatar initial + logout */
+          .status-badge,
+          .time-display,
+          .user-info {
+            display: none;
+          }
+
+          .header-right {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+          }
+
+          .avatar {
+            width: 34px;
+            height: 34px;
+            font-size: 0.85rem;
+          }
+
+          .btn-logout {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+          }
+
+          /* Tabs: icon-only on very small screens */
+          .admin-tab span {
+            display: none;
+          }
+          .admin-tab {
+            padding: 10px 12px;
+            justify-content: center;
+          }
+          .admin-tab .tab-icon {
+            margin: 0;
+          }
+
+          /* Stats row */
+          .sidebar-stats {
+            flex-direction: row;
+            gap: 0.5rem;
+          }
+          .stat-card {
+            padding: 0.75rem 1rem;
+          }
+          .stat-value {
+            font-size: 1.75rem;
+          }
+          .stat-label {
+            font-size: 0.75rem;
+          }
+
+          /* Panel */
+          .panel-glass {
+            padding: 1rem;
+            border-radius: 16px;
+          }
+          .panel-header {
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+          }
+          .panel-header h2 {
+            font-size: 1.2rem;
+          }
+          .panel-subtitle {
+            font-size: 0.82rem;
+          }
+
+          /* Alert cards: stack vertically */
+          .alert-card {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+          }
+          .alert-severity {
+            width: 100%;
+            height: auto;
+            flex-direction: row;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+          }
+          .alert-meta {
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+          }
+
+          /* Contacts: single column */
+          .contacts-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+          }
+          .contact-card {
+            padding: 1.25rem;
+          }
+
+          /* Roster: stack each item */
           .roster-item {
             flex-direction: column;
             align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+          }
+          .roster-shift {
+            font-size: 0.82rem;
+            padding: 6px 10px;
           }
           .roster-actions {
             width: 100%;
             justify-content: space-between;
-            margin-top: 1rem;
+            margin-top: 0;
+          }
+          .btn-dispatch {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+          }
+
+          /* Map: reduce min height */
+          .map-panel .panel-glass {
+            min-height: unset;
+          }
+        }
+
+        /* ── Responsive: Small phones (≤480px) ── */
+        @media (max-width: 480px) {
+          .admin-layout {
+            padding: 0.5rem;
+          }
+
+          .shield-icon {
+            width: 36px;
+            height: 36px;
+          }
+
+          .admin-tabs-vertical {
+            padding: 0.35rem;
+          }
+
+          .admin-tab {
+            padding: 9px 11px;
+          }
+
+          .panel-glass {
+            padding: 0.875rem;
+          }
+
+          .alert-type {
+            font-size: 0.95rem;
+          }
+
+          .contact-number {
+            font-size: 1.05rem;
+          }
+
+          .btn-call {
+            padding: 10px;
+            font-size: 0.9rem;
           }
         }
       `}</style>
