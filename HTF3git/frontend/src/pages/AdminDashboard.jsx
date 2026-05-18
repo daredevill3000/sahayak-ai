@@ -15,18 +15,18 @@ L.Icon.Default.mergeOptions({
 });
 
 // KLS GIT campus centre
-const CAMPUS = [15.8202, 74.4756];
+const CAMPUS = [15.815383, 74.487724];
 
 const ADMIN_HAZARDS = [
-  { id: 1, label: "Chemistry Lab Fire",  level: "critical", color: "#ef4444", lat: 15.8208, lng: 74.4762, r: 60,  detail: "Active fire — Main Building B-Block Chemistry Lab." },
-  { id: 2, label: "Electrical Fault",    level: "high",     color: "#f59e0b", lat: 15.8197, lng: 74.4768, r: 40,  detail: "High-voltage fault near EEE Dept transformer yard." },
-  { id: 3, label: "Chemical Spill",      level: "moderate", color: "#8b5cf6", lat: 15.8214, lng: 74.4748, r: 35,  detail: "Solvent spill in Pharmacy Lab — Block D corridor." },
-  { id: 4, label: "Crowd Surge",         level: "low",      color: "#22c55e", lat: 15.8193, lng: 74.4751, r: 30,  detail: "Dense crowd near Main Gate." },
+  { id: 1, label: "Chemistry Lab Fire",  level: "critical", color: "#ef4444", lat: 15.8158, lng: 74.4882, r: 60,  detail: "Active fire — Main Building B-Block Chemistry Lab." },
+  { id: 2, label: "Electrical Fault",    level: "high",     color: "#f59e0b", lat: 15.8150, lng: 74.4884, r: 40,  detail: "High-voltage fault near EEE Dept transformer yard." },
+  { id: 3, label: "Chemical Spill",      level: "moderate", color: "#8b5cf6", lat: 15.8160, lng: 74.4870, r: 35,  detail: "Solvent spill in Pharmacy Lab — Block D corridor." },
+  { id: 4, label: "Crowd Surge",         level: "low",      color: "#22c55e", lat: 15.8148, lng: 74.4873, r: 30,  detail: "Dense crowd near Main Gate." },
 ];
 
 const ADMIN_SAFE_ZONES = [
-  { id: "s1", label: "Assembly Point A", lat: 15.8218, lng: 74.4770 },
-  { id: "s2", label: "Assembly Point B", lat: 15.8188, lng: 74.4768 },
+  { id: "s1", label: "Assembly Point A", lat: 15.8163, lng: 74.4886 },
+  { id: "s2", label: "Assembly Point B", lat: 15.8145, lng: 74.4880 },
 ];
 
 const safeIcon = L.divIcon({
